@@ -1,0 +1,31 @@
+# tasks
+
+Plans and the working state of whatever is in flight. Everything here is tracked: it is the
+evidence of how the project was built. Like every tracked file, nothing here restates, quotes or
+paraphrases an external brief or specification: refer to it by a neutral name only.
+
+| File | Owner | Purpose |
+|---|---|---|
+| `todo.md` | the current piece of work | the plan of record, as checkable items, plus a Review section when it closes |
+| `lessons.md` | corrections | what was got wrong, why, and the rule that prevents it next time |
+| `<ticket>.md` | one ticket | copy `TEMPLATE.md` |
+
+## How a ticket earns its file
+
+One file per ticket, named for the ticket, not for the fix. The file outlives the branch —
+it is where the next session learns what was already ruled out.
+
+Phases are checkable and carry their evidence. `- [x]` means a command was run and its output
+supported the claim; it does not mean the code was written. State the command.
+
+When the work closes, add a **Review** section: what the framing got wrong, what turned out to
+be narrower or wider than the brief, and what was deliberately not done. That section is the
+part anyone reads six months later.
+
+## lessons.md
+
+Append after any correction. Three headings, in order: **What happened**, **What I got wrong**
+(numbered), **Rules for next time**. A lesson that does not end in a rule is a diary entry.
+
+Durable lessons about *how to work* graduate out of here into `.claude/skills/`. Keep in
+`lessons.md` only what is specific to this project.

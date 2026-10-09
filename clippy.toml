@@ -1,0 +1,23 @@
+allow-expect-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true
+disallowed-methods = [
+  { path = "std::time::SystemTime::now", reason = "time arrives as a `now` parameter or through a Clock port" },
+  { path = "std::time::Instant::now", reason = "time arrives as a `now` parameter or through a Clock port" },
+  { path = "std::time::SystemTime::elapsed", reason = "it reads the clock; subtract a `now` parameter instead" },
+  { path = "std::time::Instant::elapsed", reason = "it reads the clock; subtract a `now` parameter instead" },
+  { path = "std::env::var", reason = "configuration is parsed once in main from an environment snapshot" },
+  { path = "std::env::var_os", reason = "configuration is parsed once in main from an environment snapshot" },
+  { path = "std::env::vars", reason = "configuration is parsed once in main from an environment snapshot" },
+  { path = "std::env::vars_os", reason = "configuration is parsed once in main from an environment snapshot" },
+  { path = "std::env::args", reason = "arguments are parsed once in main" },
+  { path = "std::env::args_os", reason = "arguments are parsed once in main" },
+  { path = "std::env::current_dir", reason = "process state is read once in main and passed down" },
+  { path = "std::env::temp_dir", reason = "process state is read once in main and passed down" },
+  { path = "std::process::exit", reason = "it skips every pending Drop; main returns an ExitCode" },
+  { path = "std::thread::spawn", reason = "std::thread::scope gives every thread a known end and a waiter" },
+  { path = "std::thread::Builder::spawn", reason = "std::thread::scope gives every thread a known end and a waiter" },
+  { path = "std::thread::sleep", reason = "a decision returns the delay; the interpreter waits" },
+  { path = "std::panic::catch_unwind", reason = "a panic is a bug; failures are values" },
+]

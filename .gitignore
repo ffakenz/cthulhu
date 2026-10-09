@@ -1,0 +1,7 @@
+/target
+
+# Tracked even where a global excludes file ignores .claude.
+!.claude/
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md

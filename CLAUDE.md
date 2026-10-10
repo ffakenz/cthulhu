@@ -54,7 +54,8 @@ everything it builds is passed down as a value.
 |---|---|---|
 | Composition | Small functions and narrow traits, composed; a cross-cutting concern wraps a port instead of branching inside it | `functional-architecture`, `rust-wiring` |
 | Immutability and referential transparency | Same input, same output, no observable side effect; `let` by default, `&` before `&mut` before owned | `functional-architecture`, `rust-effects` |
-| Types are propositions — parse, don't validate | Parse input once, at the boundary, into a type that cannot hold a bad value; its existence is the proof | `functional-architecture` |
+| Types are propositions — parse, don't validate | Parse input once, at the boundary, into a type that cannot hold a bad value; its existence is the proof; each type states the domain's proposition, no weaker | `functional-architecture`, `curry-howard` |
+| The records' language | Every domain name comes from the records' terms; each domain type is a value, an entity or a message, and an entity's identity is its key, never a field | `domain-modeling` |
 | Total functions only | A value for every input the type admits; what cannot be honoured is a variant in the return type, never a panic | `functional-architecture` |
 | Errors are values | A closed enum per boundary, inside a `Result`, classified once where the failure enters; a panic is a bug | `rust-errors` |
 | Absence has a type | `Option`, never a sentinel or a `Default` meaning "not set" | `functional-architecture` |
@@ -205,6 +206,8 @@ Skills live in `.claude/skills/<name>/SKILL.md`; the agent in `.claude/agents/co
 | Name | When to use |
 |---|---|
 | `functional-architecture` | Writing or reviewing any code: the shape it must take. `references/rust.md` is its Rust spelling |
+| `domain-modeling` | Naming or shaping a domain type, adding a term, choosing an id or a key, mapping a file format onto the domain |
+| `curry-howard` | Designing, reading or reviewing a type or a signature as the claim it makes; strengthening a weak one; choosing a DSL |
 | `rust-effects` | Code that reads the clock, the environment or the arguments, or touches files, the network, processes, threads, stdio or hash order |
 | `rust-errors` | Defining an error enum, classifying a foreign failure, deciding what retries, mapping a failure to an exit code |
 | `rust-resources` | Acquiring anything that must be released: files, sockets, child processes, threads, buffered writers |

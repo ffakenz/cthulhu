@@ -83,4 +83,5 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 - [docs/prompts/](docs/prompts/) — one prompt history per working session, so the way the project
   was built stays reproducible.
 - [tasks/](tasks/README.md) — plans of record and lessons learned.
-- [.claude/skills/](.claude/skills/) — the functional-programming doctrine and its Rust spelling.
+- [.claude/skills/](.claude/skills/) — the functional-programming, Curry–Howard and
+  domain-modelling doctrine, and its Rust spelling.

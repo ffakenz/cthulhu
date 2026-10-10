@@ -26,14 +26,14 @@ Both functions read the current state; only `evolve` produces the next one.
 
 | Part | Here |
 |---|---|
-| initial state | a client with no account; `Opened` starts it |
-| decide: command and state to events | `decide_client`, `decide_dispute`: one event, or a rejection |
+| initial state | a client with no account; `evolve` applies `Opened` to it, giving the footprint `open()` returns |
+| decide: command and state to events | `decide_client`, `decide_dispute`: one event of the command's family, or a rejection |
 | evolve: state and event to state | `evolve`, the only place state is computed |
 | terminal state | none for a client; a charged-back deposit is terminal and leaves history |
 
 - One decider instance per client. A partition runs many; nothing crosses instances except intake.
 - The same decider runs in every runtime: a loop now, partition workers and a service later.
-  Recovery folds `evolve` over a log of events.
+  Recovery folds `evolve` over a log of events, each kept with its address.
 - This variant splits off opening: `Opened` is applied before *decide*, which then returns one
   event or a rejection, with its reason, rather than a list of events.
 - Origin: Jérémie Chassaing, [Functional Event Sourcing Decider](https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider).
@@ -43,6 +43,7 @@ Both functions read the current state; only `evolve` produces the next one.
 | Pattern | Where | Decision |
 |---|---|---|
 | Functional core, imperative shell | `core` is pure; `run` reaches effects only through ports; only `main.rs` touches the world | *A pure core* |
+| Domain-driven design, in functional form | `domain`: values, entities and messages named from the overview's Terms; each entity reached by its key; a client's ledger as the aggregate | *A domain model in the records' language*; *Entities identified by their keys* |
 | Event sourcing with projections | state is a fold of `evolve`; `Accounts` and `Report` are views | *State changes only through events*; *Sources, sinks and projections* |
 | Ports and adapters | `LedgerStore`, `SeenIds`, the CSV source and sink | *Effects behind ports* |
 | Composition root | `main.rs` builds every adapter | *Effects behind ports* |

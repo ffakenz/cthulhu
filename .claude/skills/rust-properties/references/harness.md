@@ -75,11 +75,33 @@ impl Gen {
     }
 }
 
+/// A run's seed: every draw of the run follows from it. Written as `0x` and sixteen hex digits;
+/// read from hex digits, with or without `0x`, and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Seed(u64);
+
+impl Seed {
+    /// The seed `text` spells, or `None` when it is not a hex `u64` after an optional `0x`.
+    fn read(text: &str) -> Option<Self> {
+        let digits = text.strip_prefix("0x").unwrap_or(text);
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
+        u64::from_str_radix(digits, 16).ok().map(Self)
+    }
+}
+
+impl fmt::Display for Seed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{:016x}", self.0)
+    }
+}
+
 /// Why a property failed.
 #[derive(Debug)]
 pub(crate) enum Failure {
     /// The law returned `false`, or panicked, on the input generated for this case.
-    Counterexample { law: &'static str, case: u32, input: String, seed: u64 },
+    Counterexample { law: &'static str, case: u32, input: String, seed: Seed },
     /// `PROPERTY_SEED` is set but is not a hex `u64`, so the run it names cannot be replayed.
     UnreadableSeed(OsString),
 }
@@ -90,7 +112,7 @@ impl fmt::Display for Failure {
             Self::Counterexample { law, case, input, seed } => {
                 write!(
                     f,
-                    "law `{law}` failed at case {case} with {input}; replay: PROPERTY_SEED=0x{seed:016x}"
+                    "law `{law}` failed at case {case} with {input}; replay: PROPERTY_SEED={seed}"
                 )
             }
             Self::UnreadableSeed(raw) => {
@@ -113,7 +135,7 @@ pub(crate) fn for_all<T: Debug>(
     holds: impl Fn(&T) -> bool,
 ) -> Result<(), Failure> {
     let seed = seed()?;
-    let mut random = Gen(seed);
+    let mut random = Gen(seed.0);
     for case in 1..=cases {
         let input = generate(&mut random);
         // `AssertUnwindSafe` holds: after a panic, `input` is only printed, never used again.
@@ -135,16 +157,15 @@ pub(crate) fn for_all<T: Debug>(
     clippy::disallowed_methods,
     reason = "the harness edge draws a fresh seed per run; tests never read the environment or the clock elsewhere"
 )]
-fn seed() -> Result<u64, Failure> {
+fn seed() -> Result<Seed, Failure> {
     let Some(pinned) = std::env::var_os("PROPERTY_SEED") else {
         let elapsed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
         let nanos = elapsed.as_secs().wrapping_mul(1_000_000_000);
-        return Ok(nanos.wrapping_add(u64::from(elapsed.subsec_nanos())));
+        return Ok(Seed(nanos.wrapping_add(u64::from(elapsed.subsec_nanos()))));
     };
-    let digits = pinned.to_str().map(|text| text.strip_prefix("0x").unwrap_or(text));
-    match digits.map(|hex| u64::from_str_radix(hex, 16)) {
-        Some(Ok(seed)) => Ok(seed),
-        Some(Err(_)) | None => Err(Failure::UnreadableSeed(pinned)),
+    match pinned.to_str().and_then(Seed::read) {
+        Some(seed) => Ok(seed),
+        None => Err(Failure::UnreadableSeed(pinned)),
     }
 }
 ```
@@ -312,8 +333,8 @@ mod status_machine {
 PROPERTY_SEED=0x18dcfb694eaf77f8 cargo test --test it prop_spelling_that_parses_re_renders_to_itself
 ```
 
-- The seed is hex, with or without `0x`. Every property in the run reads it, so name the one that
-  failed.
+- The seed is hex digits, with or without `0x`, and nothing else: a sign or a space makes it
+  unreadable. Every property in the run reads it, so name the one that failed.
 - The seed fixes every draw, and the code under test never touches the generator, so the failure
   returns at the same case with the same input until the generator itself changes. Fix the code,
   rerun until the replay passes, then run `make test` without the variable.

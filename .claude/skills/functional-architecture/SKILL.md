@@ -13,7 +13,8 @@ it: read it before writing or reviewing code.
 
 A signature is a claim and a total body is its proof: admit an input the body cannot honour and the
 claim is false, so widen the return type or narrow the argument until it is true. The full
-correspondence (evidence, case analysis, theorems, limits) is [references/first-principles.md](references/first-principles.md).
+correspondence (evidence, case analysis, theorems, limits) is [references/first-principles.md](references/first-principles.md);
+its table in Rust, and the moves that strengthen a weak type, are [[curry-howard]].
 
 ## Make illegal states unrepresentable
 
@@ -139,4 +140,4 @@ the copy that goes stale.
 `make ci` is green, every `#[expect]` reason is true, and a review walks the Banned table and the
 review-only list in `references/rust.md` § 1 over the diff.
 
-Related: [[architecture-decisions]] · [[review-and-planning]]
+Related: [[curry-howard]] · [[domain-modeling]] · [[architecture-decisions]] · [[review-and-planning]]

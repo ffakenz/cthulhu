@@ -14,6 +14,7 @@ here by its title.
 | rejection | a refused command, with its reason |
 | history | a client's deposits not charged back |
 | footprint | what one command touches: its client's account and at most one deposit |
+| address | a command's client and tx id: where its footprint is loaded and committed |
 
 ## Accounts
 

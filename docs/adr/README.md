@@ -28,3 +28,5 @@ Records here state architecture principles. How the engine treats its input is i
 - [10. Correctness defined by laws and a model](0010-correctness-defined-by-laws-and-a-model.md)
 - [11. Runtimes proven against a sequential reference](0011-runtimes-proven-against-a-sequential-reference.md)
 - [12. csv, serde and rust_decimal as dependencies](0012-csv-serde-and-rust-decimal-as-dependencies.md)
+- [13. A domain model in the records' language](0013-a-domain-model-in-the-records-language.md)
+- [14. Entities identified by their keys](0014-entities-identified-by-their-keys.md)

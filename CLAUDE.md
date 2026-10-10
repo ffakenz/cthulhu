@@ -1,16 +1,18 @@
 # CLAUDE.md
 
 Conventions for working in this repository — the single source of truth for how work is done
-here. Decisions live in `docs/adr/`.
+here. Decisions live in `docs/adr/` (architecture) and `docs/design/` (how the engine treats its
+input).
 
 ## Project
 
-Cthulhu is a Rust workspace built on the standard library alone.
+Cthulhu keeps per-client ledgers with one pure decider and interchangeable runtimes around it;
+the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-No product code yet. The workspace, its gate (`make ci`), these conventions, the decision log and
-the knowledge base are in place.
+No product code yet. The workspace, its gate (`make ci`), these conventions, the decision log, the
+knowledge base and the engine's design (`docs/`) are in place.
 
 ## Repository layout
 
@@ -26,10 +28,15 @@ cthulhu/
 ├── CLAUDE.md             this file
 ├── backend/              package `backend`, binary `cthulhu`
 │   └── src/
-│       ├── lib.rs        the functional core
+│       ├── lib.rs        the library: core, runtime and adapters
 │       └── main.rs       the composition root
 ├── docs/
-│   ├── adr/              decision records, their index and template
+│   ├── overview.md       what the engine does, and the decisions behind it
+│   ├── architecture.md   a picture of the architecture decisions
+│   ├── patterns.md       the patterns the architecture is built from
+│   ├── roadmap.md        the benchmark-gated stages ahead
+│   ├── adr/              architecture decision records, their index and template
+│   ├── design/           design records: how the engine treats its input
 │   └── prompts/          one prompt history per working session
 ├── tasks/                plans, tickets and lessons
 ├── .github/workflows/    CI: `make ci` on every push and pull request to `main`
@@ -59,11 +66,14 @@ everything it builds is passed down as a value.
 
 ## Dependencies
 
-Standard library only. Never add a dependency — no `cargo add`, no new line in a manifest's
-dependency tables — without explicit approval from a person: propose it with the rationale and
-the alternatives considered, wait for sign-off, then record it as a decision record. `make deps`
-fails the gate when `Cargo.lock` resolves anything from outside the workspace, and `cargo add`
-and `cargo install` ask for consent.
+Standard library first. The admitted crates are `csv`, `serde` and `rust_decimal`, with the 13
+crates they build on, admitted by a decision record. Never add any other dependency — no
+`cargo add`, no new line in a manifest's dependency tables — without explicit approval from a
+person: propose it with the rationale and the alternatives considered, wait for sign-off, then
+record it as a decision record. `make deps` fails the gate when `Cargo.lock` resolves a package
+from outside the workspace. When the admitted crates are first used, it checks the build graph
+(`cargo tree`, every dependency kind) against them instead, since `Cargo.lock` also lists
+optional crates that are never built. `cargo add` and `cargo install` ask for consent.
 
 ## Build, test, run
 
@@ -155,8 +165,8 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
   valuable comment in the file. Keep those.
 - Never reference a plan document, an ADR filename, a task number or "decision #N" in code or
   in a tracked document. Link a type or a function instead.
-- The decision log is the one place a record's number appears: its index, and a superseded
-  record's `Superseded by ADR M` line.
+- The decision logs (`docs/adr/`, `docs/design/`) are the one place a record's number appears:
+  their indexes, and a superseded record's `Superseded by` line.
 - Doc comments (`///`, `//!`) follow the same rules.
 - A lint is silenced only by `#[expect(lint, reason = "…")]`: never by a comment, never by
   `#[allow]`. The reason follows the same rules.
@@ -167,6 +177,12 @@ Architecture decisions are recorded in `docs/adr/` with the `architecture-decisi
 numbered record per decision, copied from `docs/adr/template.md` and indexed in
 `docs/adr/README.md`. A reversed decision is superseded, never edited. A record names the code;
 code never cites a record. Read the records that touch a change before making it.
+
+Design records, how the engine treats its input, live in `docs/design/` under the same
+conventions, indexed in `docs/design/README.md`. They comply with the architecture decisions,
+never the reverse.
+
+`docs/roadmap.md` is a standing document, not a plan of record: other documents may name it.
 
 ## Knowledge base
 

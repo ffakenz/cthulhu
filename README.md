@@ -1,7 +1,13 @@
 # Cthulhu
 
-A Rust workspace built on the standard library alone. Its engineering conventions — a functional
-core, total functions, errors as values — are enforced by the compiler, the lint gate and review.
+Cthulhu is an event-sourced ledger engine: a pure decider folds client and dispute commands into
+per-client accounts, and a command-line runtime streams the commands from a CSV file and prints
+the final accounts. Its engineering conventions — a functional core, total functions, errors as
+values — are enforced by the compiler, the lint gate and review.
+
+## Status
+
+Designed, not yet built: `backend/` holds no product code.
 
 ## Setup
 
@@ -12,7 +18,8 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-There are no other dependencies.
+Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; none is
+used yet.
 
 ## Usage
 
@@ -22,16 +29,39 @@ make ci       # the commit gate: deps, fmt-check, lint, build, test
 make run      # run the cthulhu binary
 ```
 
+Once built, the engine runs as:
+
+```sh
+cargo run -- input.csv > output.csv
+```
+
+The design record *The command-line contract* fixes the argument, the streams and the exit
+status; [docs/overview.md](docs/overview.md) gives the formats and rules.
+
+## Design
+
+- [docs/overview.md](docs/overview.md) — what the engine does, and the decisions behind it.
+- [docs/architecture.md](docs/architecture.md) — a picture of the architecture decisions.
+- [docs/patterns.md](docs/patterns.md) — the patterns the architecture is built from, the decider
+  first.
+- [docs/design/](docs/design/README.md) — the design records: how the engine treats its input.
+- [docs/roadmap.md](docs/roadmap.md) — the benchmark-gated stages the engine grows through.
+
 ## Layout
 
 ```text
 .
-├── backend/              the crate: a library (the functional core) and the `cthulhu` binary
+├── backend/              the crate: the library and the `cthulhu` binary
 │   └── src/
-│       ├── lib.rs        the functional core
+│       ├── lib.rs        the library: core, runtime and adapters
 │       └── main.rs       the composition root
 ├── docs/
+│   ├── overview.md       what the engine does
+│   ├── architecture.md   a picture of the architecture decisions
+│   ├── patterns.md       the patterns the architecture is built from
+│   ├── roadmap.md        the stages ahead
 │   ├── adr/              architecture decision records and their template
+│   ├── design/           design records: how the engine treats its input
 │   └── prompts/          the prompt history of each working session
 ├── tasks/                plans of record and lessons learned
 ├── .claude/              Claude Code skills, agents and project settings
@@ -48,7 +78,8 @@ make run      # run the cthulhu binary
 
 - [CLAUDE.md](CLAUDE.md) — how work is done here: principles, dependencies, git, reviews, tests
   and comments.
-- [docs/adr/](docs/adr/README.md) — the decision log. Read it before changing the architecture.
+- [docs/adr/](docs/adr/README.md) — the architecture decision log. Read it, and the design records
+  in [docs/design/](docs/design/README.md), before changing the engine.
 - [docs/prompts/](docs/prompts/) — one prompt history per working session, so the way the project
   was built stays reproducible.
 - [tasks/](tasks/README.md) — plans of record and lessons learned.

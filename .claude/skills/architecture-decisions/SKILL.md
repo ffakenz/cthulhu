@@ -13,8 +13,9 @@ record explains a constraint that shapes many.
 
 An architecturally significant decision: one that constrains later work, is expensive to reverse,
 or that someone will otherwise relitigate. The approved dependency set is one — this repo builds
-on the standard library alone, so admitting any crate takes a person's sign-off and a record of
-its own ([[review-and-planning]]). A layering rule is one. A wire format is one.
+on the standard library plus the crates its decision records admit, so admitting any crate takes
+a person's sign-off and a record of its own ([[review-and-planning]]). A layering rule is one. A
+wire format is one.
 
 **Tooling is not.** A formatter choice, a CI runner, a `make` target — those live in the file that
 configures them, the README or `CLAUDE.md`. If reversing it costs an afternoon, it is not a
@@ -91,8 +92,8 @@ So a `// see ADR N` comment is out, and so is "per ADR N" in the README or in a 
 reference is brittle in the direction that matters: the code moves, the number stays, and nobody
 notices.
 
-Only the decision log writes a number: the index, and a superseded record's
-`Superseded by ADR M` line. Everywhere else, prompt histories included, a decision is named by its
+Only the decision logs write a number: their indexes, and a superseded record's `Superseded by`
+line. Everywhere else, prompt histories included, a decision is named by its
 title ([[prompt-history]]).
 
 The record points the other way — **it** names the types, functions and files it governs, so the

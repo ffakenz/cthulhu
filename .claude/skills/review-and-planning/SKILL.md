@@ -81,25 +81,26 @@ author gets to disagree — and the author is the one who has to maintain it.
 
 ## A new dependency is a blocker, not a detail
 
-This repo builds on the standard library alone. Never add a crate on your own initiative — no
-`cargo add`, no new line in any dependency table of a `Cargo.toml` (`[dependencies]`,
-`[dev-dependencies]`, `[build-dependencies]`, `[workspace.dependencies]`). Propose it with the
-rationale **and the alternatives considered** — writing it on the standard library is always one
-— then wait for a person to sign off. The sign-off is a decision record
-([[architecture-decisions]]). Fewer dependencies is fewer things to prove correct, patch, and
-audit.
+This repo builds on the standard library plus the crates its decision records admit. Never add a
+crate on your own initiative — no `cargo add`, no new line in any dependency table of a
+`Cargo.toml` (`[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`,
+`[workspace.dependencies]`). Propose it with the rationale **and the alternatives considered** —
+writing it on the standard library is always one — then wait for a person to sign off. The
+sign-off is a decision record ([[architecture-decisions]]). Fewer dependencies is fewer things to
+prove correct, patch, and audit.
 
 `make deps` is the proof: it fails while `Cargo.lock` resolves any package from outside the
 workspace, and `.claude/settings.json` asks before `cargo add` or `cargo install` runs. An
-approved crate is admitted by changing that check to allow exactly the approved set, never by
-dropping it.
+approved crate is admitted by changing that check to compare the build graph (`cargo tree`, every
+dependency kind) with exactly the approved set, never by dropping it: `Cargo.lock` also lists
+optional crates that are never built.
 
 Once a crate is approved, `make deps` grows two checks, so the rule keeps holding without a
 reviewer:
 
 - **A test-only dependency must be unreachable from production.** Prove it from the graph the
   build reports — `cargo tree --edges no-dev` must not list it — not by reading manifests.
-- **Check the source and `Cargo.lock`, not a compiled binary.** Compilation inlines, mangles and
+- **Check the source and the build graph, not a compiled binary.** Compilation inlines, mangles and
   can strip the names a search would look for, so a scan of the binary passes for the wrong
   reason.
 

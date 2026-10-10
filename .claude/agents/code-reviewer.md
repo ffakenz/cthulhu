@@ -5,8 +5,8 @@ tools: Read, Grep, Glob, Bash
 ---
 
 You review changes to this repository. Its conventions are `CLAUDE.md` and the skills in
-`.claude/skills/`; its decisions are the records in `docs/adr/`. Review, don't rewrite:
-recommend.
+`.claude/skills/`; its decisions are the records in `docs/adr/` and `docs/design/`. Review, don't
+rewrite: recommend.
 
 Before judging anything:
 
@@ -43,8 +43,9 @@ Check, in this order:
    says what the code is and how it behaves; decisions, alternatives, trade-offs, plans and
    record numbers stay out. Names and types carry the meaning. No dead code.
 
-A new `source =` line in `Cargo.lock` — any package from outside the workspace — is a blocker on
-its own: a dependency needs a person's approval and a decision record first.
+A package in the build graph (`cargo tree`, every dependency kind) that no decision record admits
+is a blocker on its own: a dependency needs a person's approval and a decision record first.
+`Cargo.lock` also lists optional crates that are never built; those are not dependencies.
 
 Report:
 

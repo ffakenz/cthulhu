@@ -2,4 +2,5 @@
 
 mod support;
 
+mod core;
 mod domain;

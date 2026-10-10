@@ -24,17 +24,17 @@ it adds, test types included.
 
 ## Phase 0 — evidence (read-only)
 
-- [ ] `git log --oneline -1` — shows the `feat(domain): …` commit.
-- [ ] `make ci` — green, with the four domain laws passing.
+- [x] `git log --oneline -1` — shows the `feat(domain): …` commit.
+- [x] `make ci` — green, with the four domain laws passing.
 
 ## Phase 1 — the row generator
 
 Files: `backend/tests/it/support/generate.rs` (extend).
 
-- [ ] Add `InputRow` with its `Fields` variant, `Kind`, the five row builders, `Edge` with its six
+- [x] Add `InputRow` with its `Fields` variant, `Kind`, the five row builders, `Edge` with its six
       variants and `EDGES`, `Fresh`, `rows`, `command`, `commands` and `events`, exactly as
       `tasks/todo.md` § Generators states.
-- [ ] Every amount enters through `Amount::from_str`, and every address through
+- [x] Every amount enters through `Amount::from_str`, and every address through
       `Address::new(ClientId::from(client), TxId::from(tx))`; `command(&InputRow) ->
       Option<Command>` is `None` for a missing or unparseable amount, so the core only ever sees
       what a source could deliver.
@@ -44,16 +44,16 @@ Files: `backend/tests/it/support/generate.rs` (extend).
 Files: `backend/src/lib.rs`, `backend/src/core.rs`, `backend/src/domain/ledger.rs`,
 `backend/tests/it/main.rs`, `backend/tests/it/core.rs`.
 
-- [ ] `pub mod core;` in `lib.rs`; `mod core;` in `tests/it/main.rs`.
-- [ ] In `domain/ledger.rs`, the `pub(crate)` items whose first user is `evolve`, so `dead_code`
+- [x] `pub mod core;` in `lib.rs`; `mod core;` in `tests/it/main.rs`.
+- [x] In `domain/ledger.rs`, the `pub(crate)` items whose first user is `evolve`, so `dead_code`
       stays quiet: `Account::new`, `Account::lock` and `Deposit::new`.
-- [ ] `core.rs` with the signatures from `tasks/todo.md` § Interfaces. `open` is real from the
+- [x] `core.rs` with the signatures from `tasks/todo.md` § Interfaces. `open` is real from the
       start: `Footprint::new(Account::new(Balance::ZERO, Balance::ZERO, Lock::Unlocked), None)`.
       Lint-clean stubs for the rest: `decide_client` returns `Err(ClientReason::AccountLocked)`,
       `decide_dispute` returns `Err(DisputeReason::UnknownDeposit)`, `evolve` returns
       `Ok(state.unwrap_or_else(open))`.
-- [ ] `tests/it/core.rs`: the driver below, the lifecycle oracle and the nine laws.
-- [ ] Run `cargo test --test it core::` against the stubs: all nine pass, since every command is
+- [x] `tests/it/core.rs`: the driver below, the lifecycle oracle and the nine laws.
+- [x] Run `cargo test --test it core::` against the stubs: all nine pass, since every command is
       refused and an invariant holds vacuously then. Record that. Each law's red is its deliberate
       break in Phase 4: the real body with exactly the bug the law exists to catch.
 
@@ -260,14 +260,14 @@ fn driver_law(label: &'static str, law: impl Fn(&World, &Step) -> bool) -> Resul
 
 Files: `backend/src/core.rs`.
 
-- [ ] `decide_client`: `Repeat` is `DuplicateTx`; then a locked account is `AccountLocked`; then a
+- [x] `decide_client`: `Repeat` is `DuplicateTx`; then a locked account is `AccountLocked`; then a
       withdrawal above `available` (`Balance::from(amount) > account.available()`) is
       `InsufficientFunds`; otherwise `Deposited` or `Withdrawn` with the command's amount.
-- [ ] `decide_dispute`: no deposit is `UnknownDeposit`; then the lifecycle table, one `match` over
+- [x] `decide_dispute`: no deposit is `UnknownDeposit`; then the lifecycle table, one `match` over
       `(command, status)` with no catch-all: dispute `Settled` → `Held`; dispute `Disputed` →
       `NotSettled`; resolve `Disputed` → `Released`; chargeback `Disputed` → `ChargedBack`;
       resolve or chargeback `Settled` → `NotDisputed`. Each event carries the deposit's amount.
-- [ ] `evolve`: `let footprint = state.unwrap_or_else(open);` reads the account through its
+- [x] `evolve`: `let footprint = state.unwrap_or_else(open);` reads the account through its
       readings, then one arm per event builds the next footprint with `Footprint::new`,
       `Account::new` and `Deposit::new`, every sum through `Balance::checked_add` /
       `checked_sub` mapped to `Overflow`. Events carry no id: the footprint already sits at the
@@ -282,7 +282,7 @@ Files: `backend/src/core.rs`.
   | `Dispute(Released(amount))` | `+ amount` | `- amount` | | `Some(Settled amount)` |
   | `Dispute(ChargedBack(amount))` | | `- amount` | `Lock::Locked` | `None` |
 
-- [ ] Verify: `cargo test --test it core::` — 9 passed.
+- [x] Verify: `cargo test --test it core::` — 9 passed.
 
 ## Phase 4 — the laws, and each one broken once
 
@@ -300,8 +300,8 @@ and a law that concerns one kind of step holds trivially for the others.
 | `prop_locked_exactly_when_charged_back` | an account is locked exactly when a chargeback happened | `step.after().account().is_locked() == world.books(client).charged()` | `ChargedBack` keeps the account's lock |
 | `prop_only_held_makes_available_negative` | available falls below zero, or further below it, only through Held | `step.after()`'s available below zero and below `step.start.footprint()`'s implies `Outcome::Accepted { event: Event::Dispute(DisputeEvent::Held(_)), .. }` | `InsufficientFunds` compares the amount with `total` instead of `available` |
 | `prop_dispute_lifecycle_allows_exactly_its_transitions` | a deposit enters history Settled, and dispute commands move it exactly as the lifecycle table says | for `Intake::Dispute(command)`, `follows_lifecycle(command, step.start.footprint().deposit(), step.outcome.decision(), step.after().deposit())`; for an accepted deposit, `step.after()` holds it `Settled` with its amount | resolve on a `Settled` deposit answers `Released` |
-| `prop_locked_accounts_refuse_client_commands_only` | a locked account refuses deposits and withdrawals, and still applies dispute commands | with `step.start.footprint()` locked: `Intake::Client(_, sight)` answers `Err(Reason::Client(DuplicateTx))` on `Repeat`, else `Err(Reason::Client(AccountLocked))`; `Intake::Dispute(command)` follows the lifecycle | the lock is checked for deposits only |
-| `prop_first_command_opens_the_account` | the first command naming a client opens its account with zero balances, unlocked | under `Start::Opened`, `open()` has zero available, held and total, is unlocked and holds no deposit, and `evolve(None, &Event::Opened) == Ok(open())`; `Outcome::Accepted { event, next }` gives `evolve(None, &event) == Ok(next)` | `open` locks the account |
+| `prop_client_commands_follow_the_commands_table` | a client command is refused for a repeated tx id, then a locked account, then a withdrawal above available, and is otherwise deposited or withdrawn | for `Intake::Client(command, sight)`, `step.outcome.decision()` is `client_decision(command, sight, step.start.footprint().account())`, widened as the runtime widens it; a dispute step is the lifecycle law's, locked account or not | `InsufficientFunds` when the amount is not below `available` (`>=`); the lock checked for deposits only |
+| `prop_first_command_opens_the_account` | the first command naming a client opens its account with zero balances, unlocked, and opening an open account changes nothing | under `Start::Opened`, `open()` has zero available, held and total, is unlocked and holds no deposit, and `evolve(None, &Event::Opened) == Ok(open())`; `Outcome::Accepted { event, next }` gives `evolve(None, &event) == Ok(next)`; under `Start::Loaded(footprint)`, `evolve(Some(footprint), &Event::Opened) == Ok(footprint)` | `open` locks the account; `Opened` makes `open()` from a loaded footprint |
 
 The lifecycle oracle, written once in the test module as an exhaustive match, row for row with
 *A per-deposit dispute lifecycle*'s two lists, transitions and rejections:
@@ -352,44 +352,121 @@ fn follows_lifecycle(
 }
 ```
 
-- [ ] Stage this ticket's files first (`git add` with explicit paths), so a break in a new file
+The client-command oracle beside it, row for row with the overview's Commands table for deposits
+and withdrawals, asked of every client step:
+
+```rust
+/// The Commands table for client commands: the event a client command answers on `account`, or
+/// the reason it is refused, checked in the table's order.
+fn client_decision(
+    command: ClientCommand,
+    sight: Sight,
+    account: &Account,
+) -> Result<ClientEvent, ClientReason> {
+    match (sight, account.is_locked(), command) {
+        (Sight::Repeat, _, _) => Err(ClientReason::DuplicateTx),
+        (Sight::First, true, _) => Err(ClientReason::AccountLocked),
+        (Sight::First, false, ClientCommand::Deposit { amount, .. }) => {
+            Ok(ClientEvent::Deposited(amount))
+        }
+        (Sight::First, false, ClientCommand::Withdrawal { amount, .. })
+            if Balance::from(amount) > account.available() =>
+        {
+            Err(ClientReason::InsufficientFunds)
+        }
+        (Sight::First, false, ClientCommand::Withdrawal { amount, .. }) => {
+            Ok(ClientEvent::Withdrawn(amount))
+        }
+    }
+}
+```
+
+- [x] Stage this ticket's files first (`git add` with explicit paths), so a break in a new file
       shows in `git diff`. Then for each row: apply the break by editing, run
       `cargo test --test it <test>`, paste the failure line into Law evidence, undo the break by
       editing, and confirm `git diff --quiet` exits 0. Never `git checkout` or `git stash`
       mid-step, and never undo by copying a saved file back: the copy keeps its old modification
       time, and cargo reuses the broken build.
-- [ ] Verify: `cargo test --test it core::` — 9 passed; `make ci` — green.
+- [x] Verify: `cargo test --test it core::` — 9 passed; `make ci` — green.
 
 ## Phase 5 — sync and land
 
-- [ ] `docs/architecture.md`: the `core` row of the module table and the module box, which the
+- [x] `docs/architecture.md`: the `core` row of the module table and the module box, which the
       records commit already brought to `open`, `decide_client`, `decide_dispute`, `evolve` and
       `Overflow`, still match `backend/src/core.rs`.
-- [ ] `CLAUDE.md` and `README.md` layouts: add `core.rs`.
-- [ ] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [ ] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
-- [ ] `make ci` — green; paste the test summary line here.
-- [ ] Tick this ticket's items and its line in `tasks/todo.md`; stage explicit paths; commit with
+- [x] `CLAUDE.md` and `README.md` layouts: add `core.rs`.
+- [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
+- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] `make ci` — green; paste the test summary line here. `test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`.
+- [x] Tick this ticket's items and its line in `tasks/todo.md`; stage explicit paths; commit with
       `git commit -F` as `tasks/todo.md` § Commits gives it.
 
 ## Law evidence
 
 | Law | Break | Command | Failure line |
 |---|---|---|---|
-| `prop_decide_never_changes_state` | a `static` `AtomicBool` that `decide_client` flips on every call | `cargo test --test it prop_decide_never_changes_state` | |
-| `prop_evolve_is_total` | `Released` reads the footprint's deposit with `.expect("disputed")` | `cargo test --test it prop_evolve_is_total` | |
-| `prop_held_is_the_sum_of_disputed_deposits_and_never_negative` | `Released` leaves `held` unchanged | `cargo test --test it prop_held_is_the_sum_of_disputed_deposits_and_never_negative` | |
-| `prop_total_is_deposited_minus_withdrawn_minus_charged_back` | `ChargedBack` leaves `held` unchanged | `cargo test --test it prop_total_is_deposited_minus_withdrawn_minus_charged_back` | |
-| `prop_locked_exactly_when_charged_back` | `ChargedBack` keeps the account's lock | `cargo test --test it prop_locked_exactly_when_charged_back` | |
-| `prop_only_held_makes_available_negative` | `InsufficientFunds` compares with `total` | `cargo test --test it prop_only_held_makes_available_negative` | |
-| `prop_dispute_lifecycle_allows_exactly_its_transitions` | resolve on a `Settled` deposit answers `Released` | `cargo test --test it prop_dispute_lifecycle_allows_exactly_its_transitions` | |
-| `prop_locked_accounts_refuse_client_commands_only` | the lock is checked for deposits only | `cargo test --test it prop_locked_accounts_refuse_client_commands_only` | |
-| `prop_first_command_opens_the_account` | `open` locks the account | `cargo test --test it prop_first_command_opens_the_account` | |
+| `prop_decide_never_changes_state` | a `static` `AtomicBool` that `decide_client` flips on every call | `cargo test --test it prop_decide_never_changes_state` | ``law `deciding twice on the same footprint gives the same answer` failed at case 1 with [Client(Deposit { address: Address { client: ClientId(1), tx…; replay: PROPERTY_SEED=0x18dd4eea0d79d358`` |
+| `prop_evolve_is_total` | `Released` reads the footprint's deposit with `.expect("disputed")` | `cargo test --test it prop_evolve_is_total` | ``law `evolve applies any event to any footprint, or to none, and never fails below the amount cap` failed at case 1 with ([Dispute(Resolve(Address { client: ClientId(1), tx: TxId(0)…; replay: PROPERTY_SEED=0x18dd4eea3be8c5f0`` |
+| `prop_held_is_the_sum_of_disputed_deposits_and_never_negative` | `Released` leaves `held` unchanged | `cargo test --test it prop_held_is_the_sum_of_disputed_deposits_and_never_negative` | ``law `held equals the sum of the client's disputed deposits, and is never negative` failed at case 68 with [Dispute(Dispute(Address { client: ClientId(3), tx: TxId(0) …; replay: PROPERTY_SEED=0x18dd4eea6962c198`` |
+| `prop_total_is_deposited_minus_withdrawn_minus_charged_back` | `ChargedBack` leaves `held` unchanged | `cargo test --test it prop_total_is_deposited_minus_withdrawn_minus_charged_back` | ``law `total equals deposited minus withdrawn minus charged back` failed at case 1 with [Dispute(Chargeback(Address { client: ClientId(2), tx: TxId(…; replay: PROPERTY_SEED=0x18dd4eea97013d00`` |
+| `prop_locked_exactly_when_charged_back` | `ChargedBack` keeps the account's lock | `cargo test --test it prop_locked_exactly_when_charged_back` | ``law `an account is locked exactly when a chargeback happened` failed at case 2 with [Dispute(Chargeback(Address { client: ClientId(2), tx: TxId(…; replay: PROPERTY_SEED=0x18dd4eeac7381a70`` |
+| `prop_only_held_makes_available_negative` | `InsufficientFunds` compares with `total` | `cargo test --test it prop_only_held_makes_available_negative` | ``law `available falls below zero, or further below it, only through Held` failed at case 16 with [Client(Withdrawal { address: Address { client: ClientId(3),…; replay: PROPERTY_SEED=0x18dd4eec7b458f10`` |
+| `prop_dispute_lifecycle_allows_exactly_its_transitions` | resolve on a `Settled` deposit answers `Released` | `cargo test --test it prop_dispute_lifecycle_allows_exactly_its_transitions` | ``law `a deposit enters history Settled, and dispute commands move it exactly as the lifecycle table says` failed at case 8 with [Dispute(Resolve(Address { client: ClientId(1), tx: TxId(0) …; replay: PROPERTY_SEED=0x18dd4eeca797e720`` |
+| `prop_client_commands_follow_the_commands_table` | `InsufficientFunds` when the amount is not below `available` (`>=`); the lock checked for deposits only | `cargo test --test it prop_client_commands_follow_the_commands_table` | ``law `a client command is refused for a repeated tx id, then a locked account, then a withdrawal above available, and is otherwise deposited or withdrawn` failed at case 5 with [Client(Deposit { address: Address { client: ClientId(1), tx…; replay: PROPERTY_SEED=0x18dd4eecd8965280``<br>``law `a client command is refused for a repeated tx id, then a locked account, then a withdrawal above available, and is otherwise deposited or withdrawn` failed at case 11 with [Client(Deposit { address: Address { client: ClientId(100), …; replay: PROPERTY_SEED=0x18dd4eed08ad9de8`` |
+| `prop_first_command_opens_the_account` | `open` locks the account; `Opened` makes `open()` from a loaded footprint | `cargo test --test it prop_first_command_opens_the_account` | ``law `the first command naming a client opens its account with zero balances, unlocked, and opening an open account changes nothing` failed at case 1 with [Dispute(Resolve(Address { client: ClientId(2), tx: TxId(0) …; replay: PROPERTY_SEED=0x18dd4eed36dcfb28``<br>``law `the first command naming a client opens its account with zero balances, unlocked, and opening an open account changes nothing` failed at case 1 with [Dispute(Chargeback(Address { client: ClientId(3), tx: TxId(…; replay: PROPERTY_SEED=0x18dd4eed65f218d0`` |
+
+Each break was applied and undone by an in-place edit of the staged `core.rs`; `git diff --quiet`
+exited 0 before and after every one. All were run on the final suite, after the review's changes.
 
 ## Blocked / handed off
 
-- [ ] None expected.
+- [x] None.
 
 ## Review
 
-*Filled in when the work closes.*
+The decider is in `core.rs`: `open`, `decide_client`, `decide_dispute`, `evolve` and `Overflow`,
+pure and total. Nine laws hold it through the state-machine driver. Against the stubs all nine
+passed, every command refused and each invariant holding vacuously, as planned; each law then
+failed against its break, re-run on the final suite.
+
+Rulings:
+
+- From the pre-flight: the five row builders and `rows` are `pub(crate)`; `InputRow` derives
+  `Debug` and `Clone`, `Kind` also `Copy`; only `command` reads an `InputRow`, so `rows` keeps the
+  ids it has drawn in its own state, `Draft` and `Named`; `resolve` is reached through
+  `DISPUTE_ROWS`; `evolve` carries the lock through `Account::lock`.
+- Law 8 is `prop_client_commands_follow_the_commands_table`: every client step against
+  `client_decision`, an oracle row for row with the overview's Commands table. As planned it asked
+  only locked accounts, and no law pinned the client half of the table on an unlocked one: a `>=`
+  funds check, a withdrawal answered as a deposit and every client command refused all passed.
+  *State changes only through events* tests decide's rejection rules against decide. The count
+  stays nine: the dispute clause it drops is the lifecycle law's, which asks every dispute step,
+  locked or not, and `decide_dispute` never sees the account.
+- A repeated tx id comes from the repeated row's own client one draw in two, so repeats reach the
+  locked accounts of clients the edge never named.
+
+Code review of the staged diff: one blocker and one should-fix, acted on as ruled above, and
+three nits, all fixed: law 9 also asks that `Opened` on a loaded footprint changes nothing (its
+second break shows it); `FOUR`'s doc; Review focus 4 of the plan now says how it is pinned.
+
+Break 1's first attempt put the `static` inside `decide_client`'s parameter list and failed to
+compile; it was redone, and the compile failure is not in the evidence.
+
+Review questions, `domain-modeling` (DM) and `curry-howard` (CH), for every type this ticket adds:
+
+| Type | Name (DM 1) and kind (DM 2) | Proposition (CH 1, 2) | Keys, absences, derivations (DM 3–5, CH 3, 6) | What only a law states (CH 7) |
+|---|---|---|---|---|
+| `Overflow` | § Commands' *Overflow*; value | a balance would leave the decimal's range: `evolve`'s one failure | — | unreachable below the amount cap: the totality law |
+| `Step` (test) | one command as the runtime took it | its intake, start and outcome, each a type of its own | holds no oracle value | — |
+| `Intake` (test) | intake's hand-off | a client command with its sight, or a dispute command without one | no `Option<Sight>` | — |
+| `Start` (test) | where a footprint came from | loaded from the world, or opened | — | — |
+| `Outcome` (test) | the decider's answer | an event with the footprint it made, or a reason; `Overflow` is admitted, as the runtime's widening admits it | — | — |
+| `Books` (test) | a client's running sums | deposited, withdrawn and charged back, by name | `charged()` is derived | — |
+| `World` (test) | what the stores and intake would hold | accounts, history, used tx ids and books | every entity under its key | — |
+| `InputRow`, `Kind` (test) | a row as a source reads it | raw fields, weak on purpose, so production parsing makes every claim | `amount: None` is an absent field, never `Some("")` | — |
+| `Edge`, `Fresh`, `Named`, `Draft` (test) | the row generator | named edges; ids handed out once; the ids a row names; the rows drawn and the ids recorded | — | — |
+
+No type here carries a file format into `domain` (DM 6) or changes a value it holds (DM 7); no
+`bool`, tuple or bare primitive hides a name (CH 4). No function's return admits a case it never
+produces (CH 5), but for the widening into `Event` and `Reason`, which the driver's `decide`
+mirrors from the runtime: it never answers `Opened` or `Overflow`.

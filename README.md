@@ -55,6 +55,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 ├── backend/              the crate: the library and the `cthulhu` binary
 │   ├── src/
 │   │   ├── lib.rs        the library: core, runtime and adapters
+│   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
 │   │   └── main.rs       the composition root

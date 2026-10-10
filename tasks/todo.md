@@ -90,8 +90,10 @@ the owning ticket that pins each:
    and only opens the account. Pinned by the core lifecycle law and the run model law, through
    the unknown and foreign tx-id edges.
 4. A dispute after a resolve, and dispute commands on a locked account, apply; deposits and
-   withdrawals on it do not. Pinned by the core lifecycle and lock laws, through the
-   after-chargeback episode.
+   withdrawals on it do not. Pinned by the core lifecycle law, which asks every dispute step,
+   locked account or not, and to which a resolved deposit is settled again; and by the
+   client-commands law, through the after-chargeback episode and the repeats a locked account's
+   own client sends.
 5. Many malformed rows leave every account as it was and the report one count per kind. Pinned by
    the run malformed-row and bounded-report laws, through the malformed-row edge.
 
@@ -391,8 +393,10 @@ takes an edge.
      withdrawal with no amount, or one whose amount is an `AMOUNT_EDGES` spelling other than
      `""`, `" 1"` and `"1 "`, which no source delivers.
 
-  Repeated and unknown edges draw the client from `[1, 2, 3, 0, u16::MAX]`. `Fresh { client, tx }`
-  hands out fresh ids, clients from 100 and tx ids from 0, so neither collides with an edge id.
+  A repeated tx id comes, one draw in two, from the client of the row it repeats, which reaches
+  locked accounts; otherwise repeated and unknown edges draw the client from
+  `[1, 2, 3, 0, u16::MAX]`. `Fresh { client, tx }` hands out fresh ids, clients from 100 and tx
+  ids from 0, so neither collides with an edge id.
 - `commands` (core) — the rows that read as commands, through `command(&InputRow) ->
   Option<Command>`; `events` (core) — up to twelve events of every kind, amounts parsed from valid
   spellings including `0.0001` and `999999999999999.9999`; `address(random: &mut Gen) -> Address`
@@ -530,7 +534,7 @@ here and fills its ticket's evidence.
 
 ### Task 2: stage-1-core
 
-- [ ] `tasks/stage-1-core.md`: the decider and nine laws through a state-machine driver. The
+- [x] `tasks/stage-1-core.md`: the decider and nine laws through a state-machine driver. The
       overview's *a rejection changes no balance* is a fact of the core's types, since a rejection
       carries no event and only an event changes a footprint, so run checks it where it can fail.
 

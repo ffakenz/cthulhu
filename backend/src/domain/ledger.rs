@@ -13,6 +13,11 @@ pub struct Account {
 }
 
 impl Account {
+    /// The account holding `available` and `held`, locked or not as `lock` says.
+    pub(crate) fn new(available: Balance, held: Balance, lock: Lock) -> Self {
+        Self { available, held, lock }
+    }
+
     /// Funds not held by a dispute; only a dispute takes them below zero.
     pub fn available(&self) -> Balance {
         self.available
@@ -35,6 +40,11 @@ impl Account {
             Lock::Unlocked => false,
         }
     }
+
+    /// The account's lock.
+    pub(crate) fn lock(&self) -> Lock {
+        self.lock
+    }
 }
 
 /// Whether a chargeback has locked an account; nothing unlocks it.
@@ -55,6 +65,11 @@ pub struct Deposit {
 }
 
 impl Deposit {
+    /// The deposit of `amount`, standing at `status` in its lifecycle.
+    pub(crate) fn new(amount: Amount, status: Status) -> Self {
+        Self { amount, status }
+    }
+
     /// The amount deposited.
     pub fn amount(&self) -> Amount {
         self.amount

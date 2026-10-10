@@ -11,15 +11,16 @@ the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-No product code yet. The workspace, its gate (`make ci`), these conventions, the decision log, the
-knowledge base and the engine's design (`docs/`) are in place.
+The library is being built: the domain first, then the core, the runtime and the in-memory stores;
+the command-line program follows. The workspace, its gate (`make ci`), these conventions, the
+decision log, the knowledge base and the engine's design (`docs/`) are in place.
 
 ## Repository layout
 
 ```text
 cthulhu/
 ├── Cargo.toml            virtual workspace: members, shared package fields, lints
-├── Cargo.lock            workspace crates only (`make deps`)
+├── Cargo.lock            locked versions; `make deps` gates the build graph, not this file
 ├── rust-toolchain.toml   pinned toolchain: 1.88.0 with clippy and rustfmt
 ├── rustfmt.toml          formatting
 ├── clippy.toml           lint settings and disallowed methods
@@ -27,9 +28,12 @@ cthulhu/
 ├── README.md             setup and usage
 ├── CLAUDE.md             this file
 ├── backend/              package `backend`, binary `cthulhu`
-│   └── src/
-│       ├── lib.rs        the library: core, runtime and adapters
-│       └── main.rs       the composition root
+│   ├── src/
+│   │   ├── lib.rs        the library: core, runtime and adapters
+│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
+│   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   └── main.rs       the composition root
+│   └── tests/it/         the black-box test crate: laws, generators and the model
 ├── docs/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
@@ -71,10 +75,10 @@ Standard library first. The admitted crates are `csv`, `serde` and `rust_decimal
 crates they build on, admitted by a decision record. Never add any other dependency — no
 `cargo add`, no new line in a manifest's dependency tables — without explicit approval from a
 person: propose it with the rationale and the alternatives considered, wait for sign-off, then
-record it as a decision record. `make deps` fails the gate when `Cargo.lock` resolves a package
-from outside the workspace. When the admitted crates are first used, it checks the build graph
-(`cargo tree`, every dependency kind) against them instead, since `Cargo.lock` also lists
-optional crates that are never built. `cargo add` and `cargo install` ask for consent.
+record it as a decision record. `make deps` fails the gate when the build graph (`cargo tree`,
+every dependency kind, feature and target) holds a package that is neither a workspace member
+nor an admitted crate. It reads the graph, not `Cargo.lock`, which also lists optional crates
+that are never built. `cargo add` and `cargo install` ask for consent.
 
 ## Build, test, run
 

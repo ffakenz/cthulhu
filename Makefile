@@ -22,12 +22,18 @@ build: ## Build the workspace
 test: ## Run every test
 	$(CARGO) test --workspace --locked
 
-deps: ## Fail when Cargo.lock resolves a package from outside the workspace
-	@$(CARGO) metadata --format-version 1 --locked --offline > /dev/null
-	@if grep -n '^source = ' Cargo.lock; then echo 'Cargo.lock resolves the packages above from outside the workspace'; exit 1; fi
-	@members=$$(( $$($(CARGO) metadata --format-version 1 --no-deps --locked --offline | grep -o '"manifest_path"' | wc -l) )); \
-	locked=$$(( $$(grep -c '^\[\[package\]\]' Cargo.lock) )); \
-	if [ "$$members" -ne "$$locked" ]; then echo "Cargo.lock holds $$locked packages for $$members workspace members"; exit 1; fi
+# The crates the decision records admit, besides the workspace's own packages.
+ADMITTED := arrayvec autocfg csv csv-core itoa memchr num-traits proc-macro2 quote rust_decimal \
+    ryu serde serde_core serde_derive syn unicode-ident
+
+deps: ## Fail when the build graph holds a crate no decision record admits
+	@graph=$$($(CARGO) tree --workspace --locked --edges normal,build,dev --target all --all-features --prefix none --format '{p}') || exit 1; \
+	members=$$($(CARGO) tree --workspace --locked --depth 0 --prefix none --format '{p}') || exit 1; \
+	allowed=" $$(printf '%s\n' "$$members" | awk 'NF {printf "%s ", $$1}')$(ADMITTED) "; \
+	outside=$$(printf '%s\n' "$$graph" | awk 'NF {print $$1}' | sort -u | while read -r crate; do \
+		case "$$allowed" in (*" $$crate "*) ;; (*) echo "$$crate" ;; esac; \
+	done); \
+	if [ -n "$$outside" ]; then printf 'The build graph holds crates no decision record admits:\n%s\n' "$$outside"; exit 1; fi
 
 ci: deps fmt-check lint build test ## The commit gate
 

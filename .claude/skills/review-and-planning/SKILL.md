@@ -89,17 +89,18 @@ writing it on the standard library is always one — then wait for a person to s
 sign-off is a decision record ([[architecture-decisions]]). Fewer dependencies is fewer things to
 prove correct, patch, and audit.
 
-`make deps` is the proof: it fails while `Cargo.lock` resolves any package from outside the
-workspace, and `.claude/settings.json` asks before `cargo add` or `cargo install` runs. An
-approved crate is admitted by changing that check to compare the build graph (`cargo tree`, every
-dependency kind) with exactly the approved set, never by dropping it: `Cargo.lock` also lists
-optional crates that are never built.
+`make deps` is the proof: it fails when the build graph (`cargo tree`, every dependency kind,
+feature and target) holds a package that is neither a workspace member nor in its admitted set,
+and `.claude/settings.json` asks before `cargo add` or `cargo install` runs. It reads the graph,
+not `Cargo.lock`, which also lists optional crates that are never built. An approved crate is
+admitted by adding it to that set together with its decision record, never by weakening the
+check.
 
-Once a crate is approved, `make deps` grows two checks, so the rule keeps holding without a
-reviewer:
+Two more rules keep holding without a reviewer:
 
-- **A test-only dependency must be unreachable from production.** Prove it from the graph the
-  build reports — `cargo tree --edges no-dev` must not list it — not by reading manifests.
+- **A test-only dependency must be unreachable from production.** Once one is approved,
+  `make deps` grows a check from the graph the build reports — `cargo tree --edges no-dev` must
+  not list it — never from reading manifests.
 - **Check the source and the build graph, not a compiled binary.** Compilation inlines, mangles and
   can strip the names a search would look for, so a scan of the binary passes for the wrong
   reason.

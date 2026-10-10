@@ -9,5 +9,8 @@ publish.workspace = true
 name = "cthulhu"
 path = "src/main.rs"
 
+[dependencies]
+rust_decimal = { version = "1", default-features = false, features = ["std"] }
+
 [lints]
 workspace = true

@@ -7,7 +7,8 @@ values — are enforced by the compiler, the lint gate and review.
 
 ## Status
 
-Designed, not yet built: `backend/` holds no product code.
+Being built: the library's domain model first, then the core, the runtime and the in-memory
+stores; the command-line program follows.
 
 ## Setup
 
@@ -18,8 +19,8 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; none is
-used yet.
+Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on.
+`rust_decimal` is in use; `csv` and `serde` arrive with the CSV adapters.
 
 ## Usage
 
@@ -52,9 +53,12 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 ```text
 .
 ├── backend/              the crate: the library and the `cthulhu` binary
-│   └── src/
-│       ├── lib.rs        the library: core, runtime and adapters
-│       └── main.rs       the composition root
+│   ├── src/
+│   │   ├── lib.rs        the library: core, runtime and adapters
+│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
+│   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   └── main.rs       the composition root
+│   └── tests/it/         the black-box test crate: laws, generators and the model
 ├── docs/
 │   ├── overview.md       what the engine does
 │   ├── architecture.md   a picture of the architecture decisions

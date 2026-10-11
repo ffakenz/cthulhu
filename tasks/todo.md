@@ -711,13 +711,15 @@ run: ## Run the cthulhu binary on INPUT, the table on stdout: make run INPUT=<fi
 
 - `const MAX_ROWS` becomes `pub(crate) const MAX_ROWS`.
 - `InputRow::Unreadable` becomes `Unreadable(Flaw)`, documented as "A row that does not read,
-  and how". `InputRow::TooManyFields` becomes `TooManyFields(&'static [&'static str])`,
-  documented as "A row with more fields than the header names: these, after a full row".
+  and how". `InputRow::TooManyFields` becomes
+  `TooManyFields { first: &'static str, rest: &'static [&'static str] }`, documented as "A row
+  with more fields than the header names: `first`, then `rest`, after a full row". The shape
+  admits no empty list of extra fields.
 - `Shape::Unreadable` becomes `Unreadable(Flaw)` and `Shape::TooManyFields` becomes
-  `TooManyFields(&'static [&'static str])`. `shape()` draws them as
+  `TooManyFields { first, rest }`. `shape()` draws them as
   `1 => flaw().prop_map(Shape::Unreadable)` and
-  `1 => select(&EXTRA_FIELDS).prop_map(Shape::TooManyFields)`, and `Draft::malformed_row` passes
-  each payload on.
+  `1 => select(&EXTRA_FIELDS).prop_map(|(first, rest)| Shape::TooManyFields { first, rest })`,
+  and `Draft::malformed_row` passes each payload on.
 - `row` matches `InputRow::Unreadable(_)` and `InputRow::TooManyFields(_)`, and so does
   `model.rs`'s `Engine::take`.
 - New, beside `Shape`:
@@ -751,12 +753,12 @@ const BAD_CLIENTS: [&str; 6] = ["65536", "-1", "1.0", "x", "", "0X1"];
 /// `u32`.
 const BAD_TXS: [&str; 6] = ["4294967296", "-1", "1e3", "x", "", "0x100000000"];
 
-/// The fields after a full row with too many: an empty one, a word, two empty ones, an amount
-/// and a word.
-const EXTRA_FIELDS: [&[&str]; 4] = [&[""], &["x"], &["", ""], &["1.5", "note"]];
+/// The fields after a full row with too many, the first and the rest: an empty one, a word, two
+/// empty ones, an amount and a word.
+const EXTRA_FIELDS: [(&str, &[&str]); 4] = [("", &[]), ("x", &[]), ("", &[""]), ("1.5", &["note"])];
 
 /// A flaw, each kind as likely.
-fn flaw() -> impl Strategy<Value = Flaw> {
+pub(crate) fn flaw() -> impl Strategy<Value = Flaw> {
     prop_oneof![
         select(&BAD_TYPES).prop_map(Flaw::Type),
         select(&BAD_CLIENTS).prop_map(Flaw::Client),
@@ -772,8 +774,9 @@ fn flaw() -> impl Strategy<Value = Flaw> {
 
 ```rust
 //! Rows spelled as the CSV text a source reads: a header naming its columns in any order, then a
-//! line per row; every field bare or quoted and padded or not, every line ending in `\n`, `\r\n`
-//! or `\r`, blank lines before any line and after the last, and a byte-order mark or none.
+//! line per row; every field bare or quoted and padded or not, every line but an unended last one
+//! ending in `\n`, `\r\n` or `\r`, blank lines before any line and after the last, and a
+//! byte-order mark or none.
 
 use proptest::arbitrary::any;
 use proptest::array::uniform7;
@@ -797,7 +800,7 @@ enum Column {
     Tx,
     /// `amount`.
     Amount,
-    /// `note`, which no reader reads.
+    /// `note`, whose text every reader ignores.
     Note,
 }
 
@@ -814,7 +817,7 @@ impl Column {
     }
 }
 
-/// The columns every header names.
+/// The columns a complete header names.
 const REQUIRED: [Column; 3] = [Column::Type, Column::Client, Column::Tx];
 
 /// The ways a header lacks `type`, `client` or `tx`: each lacks the columns listed.
@@ -858,11 +861,11 @@ enum End {
     Cr,
 }
 
-/// Whether a blank line, which every reader skips, comes before a line.
+/// Whether a blank line, which every reader skips, is written, and how it ends.
 #[derive(Debug, Clone, Copy)]
 enum Blank {
     Absent,
-    Before(End),
+    Line(End),
 }
 
 /// How an id is spelled; every reader reads `7`, `+7`, `07` and `0x7` as 7.
@@ -960,11 +963,11 @@ impl Input {
             .into_iter()
             .map(|row| match row {
                 InputRow::Fields { amount: Some(_), .. } if !names_amount => {
-                    InputRow::TooManyFields(&[""])
+                    InputRow::TooManyFields { first: "", rest: &[] }
                 }
-                InputRow::Fields { .. } | InputRow::Unreadable(_) | InputRow::TooManyFields(_) => {
-                    row
-                }
+                InputRow::Fields { .. }
+                | InputRow::Unreadable(_)
+                | InputRow::TooManyFields { .. } => row,
             })
             .collect();
         Self { rows, layout }
@@ -996,7 +999,7 @@ impl Input {
         }
         match trailer {
             Blank::Absent => {}
-            Blank::Before(end) => text.extend_from_slice(terminator(*end)),
+            Blank::Line(end) => text.extend_from_slice(terminator(*end)),
         }
         text
     }
@@ -1039,10 +1042,11 @@ fn row_fields(row: &InputRow, columns: &[Column], line: &Line, position: usize) 
             }
             fields
         }
-        InputRow::Unreadable(flaw) => flawed(columns, *flaw, position),
-        InputRow::TooManyFields(extra) => {
+        InputRow::Unreadable(flaw) => unreadable(columns, *flaw, position),
+        InputRow::TooManyFields { first, rest } => {
             let mut fields = plain(columns, position);
-            fields.extend(extra.iter().map(|text| text.as_bytes().to_vec()));
+            fields.push(first.as_bytes().to_vec());
+            fields.extend(rest.iter().map(|text| text.as_bytes().to_vec()));
             fields
         }
     }
@@ -1062,7 +1066,7 @@ fn plain(columns: &[Column], position: usize) -> Vec<Vec<u8>> {
 }
 
 /// The fields of a row that does not read: a plain row under `columns`, with `flaw` applied.
-fn flawed(columns: &[Column], flaw: Flaw, position: usize) -> Vec<Vec<u8>> {
+fn unreadable(columns: &[Column], flaw: Flaw, position: usize) -> Vec<Vec<u8>> {
     let mut fields = plain(columns, position);
     match flaw {
         Flaw::Type(text) => replace(&mut fields, columns, Column::Type, text.as_bytes()),
@@ -1125,7 +1129,7 @@ fn amount_text<'a>(kind: Kind, amount: Option<&'a str>, stray: Option<&'static s
 fn write_line(text: &mut Vec<u8>, fields: &[Vec<u8>], line: &Line, ending: Last) {
     match line.blank {
         Blank::Absent => {}
-        Blank::Before(blank) => text.extend_from_slice(terminator(blank)),
+        Blank::Line(blank) => text.extend_from_slice(terminator(blank)),
     }
     for (index, content) in fields.iter().enumerate() {
         if index > 0 {
@@ -1173,7 +1177,20 @@ fn terminator(end: End) -> &'static [u8] {
 
 /// Generated rows under a layout whose header names `type`, `client` and `tx`.
 pub(crate) fn input() -> impl Strategy<Value = Input> {
-    (generate::rows(), layout()).prop_map(|(rows, layout)| Input::new(rows, layout))
+    (layout(), generate::rows()).prop_map(|(layout, rows)| Input::new(rows, layout))
+}
+
+/// Generated rows with up to two unreadable rows spliced in at drawn places, under a layout whose
+/// header names `type`, `client` and `tx`: each flaw a row can have, often.
+pub(crate) fn flawed() -> impl Strategy<Value = Input> {
+    (layout(), generate::rows(), vec((any::<Index>(), generate::flaw()), 0..=2)).prop_map(
+        |(layout, mut rows, flaws)| {
+            for (place, flaw) in flaws {
+                rows.insert(place.index(rows.len().saturating_add(1)), InputRow::Unreadable(flaw));
+            }
+            Input::new(rows, layout)
+        },
+    )
 }
 
 /// Generated rows under such a layout with no byte-order mark: a reader whose first read holds
@@ -1184,8 +1201,8 @@ pub(crate) fn unmarked() -> impl Strategy<Value = Input> {
 
 /// Generated rows under a header that lacks at least one of `type`, `client` and `tx`.
 pub(crate) fn incomplete() -> impl Strategy<Value = Input> {
-    (generate::rows(), layout(), select(&LACKING))
-        .prop_map(|(rows, layout, lacking)| Input::new(rows, layout.lacking(lacking)))
+    (layout(), generate::rows(), select(&LACKING))
+        .prop_map(|(layout, rows, lacking)| Input::new(rows, layout.lacking(lacking)))
 }
 
 /// A layout: the four columns shuffled; `amount` left out and `note` inserted at a drawn place,
@@ -1202,7 +1219,7 @@ fn layout() -> impl Strategy<Value = Layout> {
         line(),
         vec(line(), 0..=MAX_ROWS),
         weighted(0.25),
-        prop_oneof![7 => Just(Blank::Absent), 1 => ending().prop_map(Blank::Before)],
+        prop_oneof![7 => Just(Blank::Absent), 1 => ending().prop_map(Blank::Line)],
     )
         .prop_map(
             |(marked, mut columns, without_amount, note, header, lines, unended, trailer)| {
@@ -1230,7 +1247,7 @@ fn line() -> impl Strategy<Value = Line> {
     (
         uniform7(field()),
         ending(),
-        prop_oneof![7 => Just(Blank::Absent), 1 => ending().prop_map(Blank::Before)],
+        prop_oneof![7 => Just(Blank::Absent), 1 => ending().prop_map(Blank::Line)],
         (id_spelling(), id_spelling()).prop_map(|(client, tx)| Ids { client, tx }),
         prop_oneof![Just(Tail::Written), Just(Tail::Left)],
         option::weighted(0.25, select(&STRAY_AMOUNTS)),
@@ -1338,6 +1355,15 @@ fn read(input: &Input) -> Vec<Result<Row, SourceError>> {
     CsvSource::new(input.text().as_slice()).take(bound).collect()
 }
 
+/// What the CSV source reads from `input`'s text when reading fails at the byte `cut` picks, at
+/// most two items past its rows.
+fn read_broken(input: &Input, cut: Index) -> Vec<Result<Row, SourceError>> {
+    let text = input.text();
+    let left = text.get(..cut.index(text.len().saturating_add(1))).unwrap_or(&text);
+    let bound = input.rows().len().saturating_add(2);
+    CsvSource::new(Breaking { left }).take(bound).collect()
+}
+
 /// A reader that yields `left`, then fails every read.
 #[derive(Debug)]
 struct Breaking<'a> {
@@ -1380,7 +1406,7 @@ impl Write for Full {
 fn prop_source_reads_every_spelling_as_the_model_reads_the_rows() {
     let law = support::for_all(
         "the source reads each row, however it is spelled, as the model reads it, in order",
-        spelling::input(),
+        spelling::flawed(),
         |input| read(input) == expected(input),
     );
     if let Err(failure) = law {
@@ -1405,18 +1431,11 @@ fn prop_read_failure_ends_the_source() {
     let law = support::for_all(
         "a read failure ends the source with Unreadable, after rows the model reads as they were",
         (spelling::unmarked(), any::<Index>()),
-        |(input, cut)| {
-            let text = input.text();
-            let left = text.get(..cut.index(text.len().saturating_add(1))).unwrap_or(&text);
-            let bound = input.rows().len().saturating_add(2);
-            let read: Vec<Result<Row, SourceError>> =
-                CsvSource::new(Breaking { left }).take(bound).collect();
-            match read.split_last() {
-                Some((last, before)) => {
-                    *last == Err(SourceError::Unreadable) && expected(input).starts_with(before)
-                }
-                None => false,
+        |(input, cut)| match read_broken(input, *cut).split_last() {
+            Some((last, before)) => {
+                *last == Err(SourceError::Unreadable) && expected(input).starts_with(before)
             }
+            None => false,
         },
     );
     if let Err(failure) = law {
@@ -1789,12 +1808,12 @@ non-UTF-8 amount is unreadable (Questions on gaps 7).
 
 Red:
 
-- [ ] `generate.rs` and `model.rs` as Test code says. `support.rs`: `pub(crate) mod spelling;`.
+- [x] `generate.rs` and `model.rs` as Test code says. `support.rs`: `pub(crate) mod spelling;`.
       `support/spelling.rs` without `prefix` and `with_rows`. `main.rs`: `mod csv_io;`.
       `csv_io.rs`: the three source laws, with only the imports, helpers and stubs they use
       (`expected`, `read`, `Breaking`) and the module doc's clause on the source; Task 3 adds
       the rest.
-- [ ] `backend/src/lib.rs`: `pub mod csv_io;`. `backend/src/csv_io.rs`, the stub:
+- [x] `backend/src/lib.rs`: `pub mod csv_io;`. `backend/src/csv_io.rs`, the stub:
 
   ```rust
   //! The CSV adapters.
@@ -1825,9 +1844,24 @@ Red:
   }
   ```
 
-- [ ] `make deps fmt-check lint build` green. `cargo test --workspace --locked` fails on exactly
+- [x] `make deps fmt-check lint build` green. `cargo test --workspace --locked` fails on exactly
       the three source laws: the source law on any row, the header law on any input, the
       read-failure law on any input, since the stub yields no `Err`. The 26 earlier tests pass.
+      Ran with `PROPTEST_DISABLE_FAILURE_PERSISTENCE=1`: "26 passed; 3 failed". The source law
+      shrank to one deposit row, the header law to a header without `type`, and the read-failure
+      law to an empty input. `cargo fmt` reflowed three lines of `spelling.rs`.
+- [x] Review fixes, staged before the red commit. The code-reviewer found no blocker and one
+      should-fix: each flawed spelling was reached about once per run.
+  - The should-fix: the source law draws `spelling::flawed()`, which splices up to two
+    unreadable rows into the rows. The runtime laws keep `input()`.
+  - Nits taken:
+    - layouts are drawn before rows, so a shrunk row keeps its line;
+    - three doc comments are made true;
+    - `Blank::Before` becomes `Blank::Line`;
+    - `TooManyFields { first, rest }` admits no empty list of extra fields;
+    - the read-failure law reads through a `read_broken` helper.
+  - The private row speller `flawed` became `unreadable`, freeing the name.
+  - Re-run: "26 passed; 3 failed", the same three laws.
 - [ ] Per-commit gate (red); commit `test(csv_io): …`.
 
 Green:

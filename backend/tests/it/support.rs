@@ -3,6 +3,7 @@
 
 pub(crate) mod generate;
 pub(crate) mod model;
+pub(crate) mod spelling;
 
 use std::fmt;
 use std::panic::Location;

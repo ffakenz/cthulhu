@@ -145,8 +145,8 @@ impl Engine {
     /// One input row, as the overview's tables say.
     fn take(&mut self, input: &InputRow) {
         match input {
-            InputRow::Unreadable => count(&mut self.malformed, RowError::Unreadable),
-            InputRow::TooManyFields => count(&mut self.malformed, RowError::TooManyFields),
+            InputRow::Unreadable(_) => count(&mut self.malformed, RowError::Unreadable),
+            InputRow::TooManyFields { .. } => count(&mut self.malformed, RowError::TooManyFields),
             InputRow::Fields { kind, client, tx, amount } => match kind {
                 Kind::Deposit => {
                     if let Some(units) = self.amount(amount.as_deref()) {

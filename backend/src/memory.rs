@@ -1,19 +1,20 @@
-//! Store doubles: a ledger and a set of seen tx ids in plain ordered collections.
+//! The in-memory stores: the ledger and the seen tx ids, which cannot fail.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 
-use backend::domain::{Account, Address, ClientId, Deposit, Footprint, Sight, TxId};
-use backend::run::{Accounts, LedgerStore, SeenIds};
+use crate::domain::{Account, Address, ClientId, Deposit, Footprint, Sight, TxId};
+use crate::run::{Accounts, LedgerStore, SeenIds};
 
-/// A ledger in two maps: accounts by client id, deposits by address.
+/// The ledger in memory: accounts by client id, in client order as the snapshot yields them, and
+/// deposits by address, looked up only by key. `Default` builds the empty ledger.
 #[derive(Debug, Default)]
-pub(crate) struct Ledger {
+pub struct MemoryLedger {
     accounts: BTreeMap<ClientId, Account>,
-    deposits: BTreeMap<Address, Deposit>,
+    deposits: HashMap<Address, Deposit>,
 }
 
-impl LedgerStore for Ledger {
+impl LedgerStore for MemoryLedger {
     type Error = Infallible;
 
     fn load(&self, address: Address) -> Result<Option<Footprint>, Self::Error> {
@@ -37,11 +38,11 @@ impl LedgerStore for Ledger {
     }
 }
 
-/// Seen tx ids in a set.
+/// The seen tx ids in memory. `Default` builds the empty set.
 #[derive(Debug, Default)]
-pub(crate) struct Seen(BTreeSet<TxId>);
+pub struct MemorySeenIds(HashSet<TxId>);
 
-impl SeenIds for Seen {
+impl SeenIds for MemorySeenIds {
     type Error = Infallible;
 
     fn sight(&mut self, tx: TxId) -> Result<Sight, Self::Error> {

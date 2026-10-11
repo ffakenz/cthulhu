@@ -46,7 +46,7 @@ pub(crate) const AMOUNT_EDGES: [&str; 27] = [
 ];
 
 /// One draw in two.
-const EVEN_ODDS: NonZeroU64 = NonZeroU64::MIN.saturating_add(1);
+pub(crate) const EVEN_ODDS: NonZeroU64 = NonZeroU64::MIN.saturating_add(1);
 
 /// The ASCII digits.
 const DIGITS: [char; 10] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -364,7 +364,7 @@ const KINDS: [Kind; 5] =
 /// The builders of the three dispute commands.
 const DISPUTE_ROWS: [fn(u16, u32) -> InputRow; 3] = [dispute, resolve, chargeback];
 
-/// The clients ordinary rows name.
+/// The clients ordinary rows name, and the edges that need no other.
 const CLIENTS: [u16; 3] = [1, 2, 3];
 
 /// The clients repeated and unknown tx ids come from: the ordinary ones and the extremes.
@@ -744,4 +744,18 @@ fn event(random: &mut Gen) -> Option<Event> {
         Event::Dispute(DisputeEvent::ChargedBack(amount)),
     ];
     random.pick(&events).copied()
+}
+
+/// Clients an address draws from: few, so addresses recur, with both extremes.
+const ADDRESS_CLIENTS: [u16; 5] = [1, 2, 3, 0, u16::MAX];
+
+/// Tx ids an address draws from: few, so addresses recur, with both extremes.
+const ADDRESS_TXS: [u32; 5] = [1, 2, 3, 0, u32::MAX];
+
+/// One address: a client from `ADDRESS_CLIENTS` and a tx id from `ADDRESS_TXS`, so addresses
+/// recur.
+pub(crate) fn address(random: &mut Gen) -> Address {
+    let client = random.pick(&ADDRESS_CLIENTS).copied().unwrap_or_default();
+    let tx = random.pick(&ADDRESS_TXS).copied().unwrap_or_default();
+    Address::new(ClientId::from(client), TxId::from(tx))
 }

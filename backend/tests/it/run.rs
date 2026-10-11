@@ -5,11 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::num::NonZeroU64;
 
-use backend::domain::{Account, Balance, ClientId, ClientReason, Command, Reason};
+use backend::domain::{Account, Balance, ClientId, ClientReason, Command, DisputeReason, Reason};
+use backend::memory::{MemoryLedger, MemorySeenIds};
 use backend::run::{Row, RowError, RunError, SourceError, Summary, run};
 
-use crate::support::generate::{self, InputRow, Unique};
-use crate::support::{self, Gen, model, stores};
+use crate::support::generate::{self, InputRow, Unique, chargeback, deposit, dispute, withdrawal};
+use crate::support::model::{Printed, PrintedAccount};
+use crate::support::{self, Gen, model};
 
 type Source = Vec<Result<Row, SourceError>>;
 
@@ -22,16 +24,16 @@ fn source(rows: &[InputRow]) -> Source {
 fn summarize(
     source: impl IntoIterator<Item = Result<Row, SourceError>>,
 ) -> Result<Summary, RunError<Infallible, Infallible>> {
-    run(source, &mut stores::Ledger::default(), &mut stores::Seen::default())
+    run(source, &mut MemoryLedger::default(), &mut MemorySeenIds::default())
 }
 
 /// The summary as the output would print it.
-fn printed(summary: &Summary) -> model::Printed {
-    model::Printed {
+fn printed(summary: &Summary) -> Printed {
+    Printed {
         accounts: summary
             .accounts
             .by_client()
-            .map(|(client, account)| model::PrintedAccount {
+            .map(|(client, account)| PrintedAccount {
                 client,
                 available: account.available().to_string(),
                 held: account.held().to_string(),
@@ -291,4 +293,68 @@ fn prop_engine_agrees_with_the_naive_model() {
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+/// The overview's worked example: nine rows over four clients.
+fn overview_rows() -> [InputRow; 9] {
+    [
+        deposit(1, 10, "25.5"),
+        withdrawal(1, 11, "5.25"),
+        deposit(2, 20, "10"),
+        withdrawal(2, 21, "10"),
+        dispute(2, 20),
+        chargeback(2, 20),
+        deposit(2, 22, "3"),
+        withdrawal(3, 30, "1"),
+        dispute(4, 40),
+    ]
+}
+
+/// What the overview prints for it.
+fn overview_printed() -> Printed {
+    Printed {
+        accounts: vec![
+            PrintedAccount {
+                client: ClientId::from(1),
+                available: "20.2500".to_owned(),
+                held: "0.0000".to_owned(),
+                total: Some("20.2500".to_owned()),
+                locked: false,
+            },
+            PrintedAccount {
+                client: ClientId::from(2),
+                available: "-10.0000".to_owned(),
+                held: "0.0000".to_owned(),
+                total: Some("-10.0000".to_owned()),
+                locked: true,
+            },
+            PrintedAccount {
+                client: ClientId::from(3),
+                available: "0.0000".to_owned(),
+                held: "0.0000".to_owned(),
+                total: Some("0.0000".to_owned()),
+                locked: false,
+            },
+            PrintedAccount {
+                client: ClientId::from(4),
+                available: "0.0000".to_owned(),
+                held: "0.0000".to_owned(),
+                total: Some("0.0000".to_owned()),
+                locked: false,
+            },
+        ],
+        rejected: vec![
+            (Reason::Client(ClientReason::AccountLocked), NonZeroU64::MIN),
+            (Reason::Client(ClientReason::InsufficientFunds), NonZeroU64::MIN),
+            (Reason::Dispute(DisputeReason::UnknownDeposit), NonZeroU64::MIN),
+        ],
+        malformed: vec![],
+    }
+}
+
+#[test]
+fn the_overview_example_ends_with_its_documented_accounts() {
+    let summary =
+        summarize(source(&overview_rows())).expect("a source of readable rows does not fail");
+    assert_eq!(printed(&summary), overview_printed());
 }

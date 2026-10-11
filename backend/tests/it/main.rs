@@ -4,4 +4,5 @@ mod support;
 
 mod core;
 mod domain;
+mod memory;
 mod run;

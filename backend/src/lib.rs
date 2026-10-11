@@ -2,4 +2,5 @@
 
 pub mod core;
 pub mod domain;
+pub mod memory;
 pub mod run;

@@ -85,7 +85,8 @@ the owning ticket that pins each:
    `Fresh` hands out tx `0` first, so ordinary deposits and withdrawals use it; tx `u32::MAX` is
    an unknown dispute target; clients `0` and `u16::MAX` send the repeated and unknown commands,
    which still open their accounts. Every core and run law meets them through the command
-   generator, and the store laws address tx `0` and `u32::MAX` directly.
+   generator, and the store laws address tx `0` and `u32::MAX`, and clients `0` and `u16::MAX`,
+   directly.
 3. A dispute command naming a withdrawal's tx or another client's deposit is `UnknownDeposit`
    and only opens the account. Pinned by the core lifecycle law and the run model law, through
    the unknown and foreign tx-id edges.
@@ -400,8 +401,8 @@ takes an edge.
 - `commands` (core) — the rows that read as commands, through `command(&InputRow) ->
   Option<Command>`; `events` (core) — up to twelve events of every kind, amounts parsed from valid
   spellings including `0.0001` and `999999999999999.9999`; `address(random: &mut Gen) -> Address`
-  (memory) — one address, a client from `[1, 2, 3]` and a tx id from `[1, 2, 3, 0, u32::MAX]`,
-  so addresses recur.
+  (memory) — one address, a client from `[1, 2, 3, 0, u16::MAX]` and a tx id from
+  `[1, 2, 3, 0, u32::MAX]`, so addresses recur and the store laws meet every boundary id.
 - `unique` and `interleave` (run) — `unique(&[InputRow]) -> Unique` drops malformed rows and every
   deposit or withdrawal whose tx an earlier one used; `interleave(random, &Unique) -> Unique` merges
   the per-client sequences in random order, keeping each client's order. Only these two build a
@@ -545,7 +546,7 @@ here and fills its ticket's evidence.
 
 ### Task 4: stage-1-memory
 
-- [ ] `tasks/stage-1-memory.md`: `MemoryLedger` and `MemorySeenIds`, four store laws, run's laws
+- [x] `tasks/stage-1-memory.md`: `MemoryLedger` and `MemorySeenIds`, four store laws, run's laws
       moved onto them, the worked example end to end.
 
 ## Closing
@@ -567,4 +568,81 @@ After Task 4, in this order:
 
 ## Review
 
-*Filled in when the work closes.*
+Closed on 2026-10-10, executed inline in one session. The library core of stage 1 is four commits
+on `feat/stage-1-core`, on top of the amended records commit:
+
+| Commit | Ticket | Laws | Tests after it |
+|---|---|---|---|
+| `feat(domain): parse amounts once into exact four-decimal money` | `tasks/stage-1-domain.md` | 4 | 4 |
+| `feat(core): decide and evolve ledger commands as a pure decider` | `tasks/stage-1-core.md` | 9 | 13 |
+| `feat(run): run commands in arrival order over the store ports` | `tasks/stage-1-run.md` | 8 | 21 |
+| `feat(memory): keep the ledger in memory stores held to the store laws` | `tasks/stage-1-memory.md` | 4, and the worked example | 26 |
+
+Every law failed once against its deliberate break, and each ticket's Law evidence holds the
+line. Every commit passed `make ci` and a code review of its staged diff before it landed.
+
+How the plan changed while it ran: first the scan's fixes, then rulings recorded in each ticket's
+Review.
+
+- During the first ticket, before its commit, a scan that compiled every ticket's code against
+  § Interfaces found four gaps, each fixed where it lay: the File map now names `Account::lock`;
+  the row builders are `pub(crate)`, and `rows` keeps the ids it draws in its own state; the
+  views' boundary API is in Risks; the memory ticket's Files list names the generators.
+- Domain: `make deps` reads the graph with every feature, as `make lint` builds it;
+  `amount_value` yields a named value; `Display for Amount` stays.
+- Core: an oracle law holds the client half of the Commands table, in place of the
+  locked-account law, which left unlocked accounts unchecked; one draw in two, a repeat comes
+  from the repeated row's own client, which reaches locked accounts.
+- Run: the source-error law also requires that nothing after the first error is read.
+- Memory: loads name the address just committed one time in two; the store laws meet clients `0`
+  and `u16::MAX`; the empty ledger is read.
+
+The final review of the whole branch found nothing critical and one important gap, fixed: the
+balance law's generator brought a balance back to zero only through an amount at the scale it
+was added at, so the law missed, in 10 runs of 10, a break that turns a zero reached across
+scales into `-0.0000`; the code itself prints `0.0000` there. The generator now also moves the
+whole balance back to zero, spelled without trailing zeros, and the law catches that break in 10
+of 10. The second Review focus item, which understated the store laws, is corrected here, and the
+planning session's prompt history lands in its own commit. The other eleven points the reviewer
+declined to judge stand, for these reasons:
+
+- `Account::total()`'s `None` is unreachable below the amount cap; how the CSV sink prints it is
+  the next stage's to decide.
+- `ClientId` and `TxId` have no reading back or `Display` until their first reader, the CSV sink,
+  as the plan defers `Display` for the rejection reasons.
+- A dispute row carrying an amount is untested until the CSV source exists, which must ignore the
+  amount.
+- Id parsing that accepts `+1`, `01` and `0x10` is a recorded cost of *Rows parsed into commands
+  at the boundary*.
+- `make deps` matches crates by name: a crate from another source would show in the manifest diff
+  that every review reads.
+- `HashMap` and `HashSet` in `memory.rs` are never iterated, so hash order never reaches output.
+- The memory `Reference` and the core `World` mirror the code they check: a key-value contract
+  leaves little else to write.
+- `rust_decimal` rounding past 7.9 × 10^24, and `{:.4}` dropping a fifth decimal, are
+  unreachable: below that bound every amount and balance has at most four decimals.
+- `mod core` at the test crate root shadows nothing written: no bare `core::` path appears, and
+  Risks records it.
+- `cargo tree --target all` needs the network; CI runs online, as Risks records.
+- `unique` keeps a dispute whose target row it dropped as a repeat: that row was a rejected repeat
+  in either order.
+
+The review's five minor findings are deferred.
+
+Deferred:
+
+- The runtime opens an account through `open()` and never answers `Event::Opened`. Before an
+  event log lands, decide whether a step yields it, so a replay reopens the clients named only by
+  rejected commands.
+- The reordering law could compare whole summaries, not only accounts: with unique tx ids the
+  report is order-invariant too.
+- `prop_decide_never_changes_state` checks determinism, all a `&`-typed decision can break;
+  rename it or fold it into the table law.
+- `Account` offers `is_locked() -> bool` beside the crate-visible `lock() -> Lock`; one public
+  reading, the enum, would do.
+- `CLAUDE.md` § Tests describes `support.rs` alone; the support tree now holds `generate.rs` and
+  `model.rs` too.
+- As the person asked during the build, the tests move onto `proptest` after stage 1. That needs
+  a record superseding *csv, serde and rust_decimal as dependencies*, whose set is exact, to admit
+  it and the crates it builds on as dev-dependencies, and `make deps` to admit them for dev
+  builds only, failing when one reaches the normal graph.

@@ -11,9 +11,9 @@ the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-The library is being built: the domain first, then the core, the runtime and the in-memory stores;
-the command-line program follows. The workspace, its gate (`make ci`), these conventions, the
-decision log, the knowledge base and the engine's design (`docs/`) are in place.
+The library is built: the domain, the core, the sequential runtime and the in-memory stores, each
+held to its laws. The command-line runtime is next. The workspace, its gate (`make ci`), these
+conventions, the decision log, the knowledge base and the engine's design (`docs/`) are in place.
 
 ## Repository layout
 
@@ -33,6 +33,7 @@ cthulhu/
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   └── main.rs       the composition root

@@ -17,8 +17,8 @@ included.
 
 ## Phase 0 — evidence (read-only)
 
-- [ ] `git log --oneline -1` — shows the `feat(run): …` commit.
-- [ ] `make ci` — green, with the domain, core and run laws passing.
+- [x] `git log --oneline -1` — shows the `feat(run): …` commit.
+- [x] `make ci` — green, with the domain, core and run laws passing.
 
 ## Phase 1 — the store laws against stub stores (red)
 
@@ -26,15 +26,15 @@ Files: `backend/src/lib.rs`, `backend/src/memory.rs`, `backend/tests/it/main.rs`
 `backend/tests/it/support.rs`, `backend/tests/it/support/generate.rs`,
 `backend/tests/it/memory.rs`.
 
-- [ ] `pub mod memory;` in `lib.rs`; `mod memory;` in `tests/it/main.rs`.
-- [ ] `memory.rs` with `MemoryLedger` and `MemorySeenIds` as `tasks/todo.md` § Interfaces gives
+- [x] `pub mod memory;` in `lib.rs`; `mod memory;` in `tests/it/main.rs`.
+- [x] `memory.rs` with `MemoryLedger` and `MemorySeenIds` as `tasks/todo.md` § Interfaces gives
       them, and stubs: `load` answers `Ok(None)`, `commit` writes nothing, `snapshot` is empty,
       `sight` always answers `First`.
-- [ ] `support.rs`: `pub(crate) fn infallible<T>(result: Result<T, Infallible>) -> T`, by
+- [x] `support.rs`: `pub(crate) fn infallible<T>(result: Result<T, Infallible>) -> T`, by
       `match result { Ok(value) => value, Err(never) => match never {} }`.
-- [ ] `support/generate.rs`: `address`, as `tasks/todo.md` § Generators states.
-- [ ] `tests/it/memory.rs`: the generator and reference below, and the four laws.
-- [ ] Red: `cargo test --test it memory::` — all four fail with counterexamples (a stub that keeps
+- [x] `support/generate.rs`: `address`, as `tasks/todo.md` § Generators states.
+- [x] `tests/it/memory.rs`: the generator and reference below, and the four laws.
+- [x] Red: `cargo test --test it memory::` — all four fail with counterexamples (a stub that keeps
       nothing breaks every store law); record the failure lines.
 
 ```rust
@@ -79,16 +79,16 @@ struct Reference {
 
 File: `backend/src/memory.rs`.
 
-- [ ] `MemoryLedger { accounts: BTreeMap<ClientId, Account>, deposits: HashMap<Address, Deposit> }`:
+- [x] `MemoryLedger { accounts: BTreeMap<ClientId, Account>, deposits: HashMap<Address, Deposit> }`:
       accounts in a `BTreeMap` because the snapshot is ordered by client id; deposits in a
       `HashMap`, only ever looked up by key. `load(address)` builds the footprint with
       `Footprint::new` from the account under `address.client()` and the deposit at `address`.
       `commit(address, footprint)` writes the account, then the footprint's deposit at `address`
       or `remove`s that key, so a charged-back deposit leaves memory. A discarded previous value is
       `let _ = …`, since discarding is the point.
-- [ ] `MemorySeenIds(HashSet<TxId>)`: `sight` is `First` when `insert` returns `true`.
-- [ ] Verify: `cargo test --test it memory::` — 4 passed.
-- [ ] Stage this ticket's files first (`git add` with explicit paths), so a break in a new file
+- [x] `MemorySeenIds(HashSet<TxId>)`: `sight` is `First` when `insert` returns `true`.
+- [x] Verify: `cargo test --test it memory::` — 4 passed.
+- [x] Stage this ticket's files first (`git add` with explicit paths), so a break in a new file
       shows in `git diff`. Then for each row of the store-law table: apply the break by editing,
       run `cargo test --test it <test>`, paste the failure line into Law evidence, undo the break
       by editing, and confirm `git diff --quiet` exits 0. Never `git checkout` or `git stash`
@@ -100,10 +100,10 @@ File: `backend/src/memory.rs`.
 Files: `backend/tests/it/run.rs`, `backend/tests/it/support.rs`, delete
 `backend/tests/it/support/stores.rs`.
 
-- [ ] `summarize` builds `MemoryLedger::default()` and `MemorySeenIds::default()`.
-- [ ] Delete `support/stores.rs` and its `mod` line; `git grep -n 'stores::' backend/tests` lists
+- [x] `summarize` builds `MemoryLedger::default()` and `MemorySeenIds::default()`.
+- [x] Delete `support/stores.rs` and its `mod` line; `git grep -n 'stores::' backend/tests` lists
       nothing.
-- [ ] Verify: `cargo test --test it run::` — 8 passed.
+- [x] Verify: `cargo test --test it run::` — 8 passed.
 
 ## Phase 4 — the worked example, end to end
 
@@ -169,40 +169,79 @@ fn overview_printed() -> Printed {
 }
 ```
 
-- [ ] `the_overview_example_ends_with_its_documented_accounts`: `printed(&summary)` of
+- [x] `the_overview_example_ends_with_its_documented_accounts`: `printed(&summary)` of
       `summarize(source(&overview_rows()))` equals `overview_printed()`.
-- [ ] It passes on its first run: the behaviour already exists, so this is a characterisation
+- [x] It passes on its first run: the behaviour already exists, so this is a characterisation
       test, and the ticket says so instead of manufacturing a red.
-- [ ] Verify: `cargo test --test it` — 26 passed (domain 4, core 9, run 8 and the worked example,
+- [x] Verify: `cargo test --test it` — 26 passed (domain 4, core 9, run 8 and the worked example,
       memory 4).
 
 ## Phase 5 — sync, close and land
 
-- [ ] `README.md` § Status: the library is built — domain, core, the sequential runtime and the
+- [x] `README.md` § Status: the library is built — domain, core, the sequential runtime and the
       in-memory stores, with their laws — and the command-line runtime is next. `CLAUDE.md` §
       Status says the same.
-- [ ] `CLAUDE.md` and `README.md` layouts: add `memory.rs`.
-- [ ] `tasks/todo.md`: tick Task 4. Its Review section waits for Closing, which folds it into
+- [x] `CLAUDE.md` and `README.md` layouts: add `memory.rs`.
+- [x] `tasks/todo.md`: tick Task 4. Its Review section waits for Closing, which folds it into
       this commit.
-- [ ] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [ ] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
-- [ ] `make ci` — green; paste the test summary line here.
-- [ ] Stage explicit paths, including the deleted `support/stores.rs`; commit with
+- [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
+- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] `make ci` — green; paste the test summary line here. `test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`.
+- [x] Stage explicit paths, including the deleted `support/stores.rs`; commit with
       `git commit -F` as `tasks/todo.md` § Commits gives it.
 
 ## Law evidence
 
 | Law | Break | Command | Failure line |
 |---|---|---|---|
-| `prop_read_returns_what_the_last_commit_wrote` | `commit` removes nothing when the footprint holds no deposit | `cargo test --test it prop_read_returns_what_the_last_commit_wrote` | |
-| `prop_commit_writes_account_and_deposit_together` | `commit` skips the account when the footprint holds a deposit | `cargo test --test it prop_commit_writes_account_and_deposit_together` | |
-| `prop_snapshot_reflects_every_commit_before_it` | `snapshot` leaves out accounts whose balances are all zero | `cargo test --test it prop_snapshot_reflects_every_commit_before_it` | |
-| `prop_recorded_id_stays_recorded` | `sight` forgets an id when it answers `Repeat` | `cargo test --test it prop_recorded_id_stays_recorded` | |
+| `prop_read_returns_what_the_last_commit_wrote` | `commit` removes nothing when the footprint holds no deposit | `cargo test --test it prop_read_returns_what_the_last_commit_wrote` | ``law `a load returns what the last commit wrote` failed at case 27 with [Commit(Address { client: ClientId(2), tx: TxId(0) }, Footpr…; replay: PROPERTY_SEED=0x18dd51bda21f8950`` |
+| `prop_commit_writes_account_and_deposit_together` | `commit` skips the account when the footprint holds a deposit | `cargo test --test it prop_commit_writes_account_and_deposit_together` | ``law `a commit's account and deposit are read back together` failed at case 1 with [Load(Address { client: ClientId(2), tx: TxId(1) }), Commit(…; replay: PROPERTY_SEED=0x18dd51bddcadb1c8`` |
+| `prop_snapshot_reflects_every_commit_before_it` | `snapshot` leaves out accounts whose balances are all zero | `cargo test --test it prop_snapshot_reflects_every_commit_before_it` | ``law `a snapshot reflects every commit before it, by client id` failed at case 2 with [Commit(Address { client: ClientId(0), tx: TxId(4294967295) …; replay: PROPERTY_SEED=0x18dd51be1bb158e8`` |
+| `prop_recorded_id_stays_recorded` | `sight` forgets an id when it answers `Repeat` | `cargo test --test it prop_recorded_id_stays_recorded` | ``law `a recorded id stays recorded: the first sight of an id is First, every later one Repeat` failed at case 2 with [1, 3, 1, 2, 1, 3, 3, 2, 4294967295, 4294967295, 3, 3, 0, 3,…; replay: PROPERTY_SEED=0x18dd51be58dfb750`` |
+
+Each break was applied and undone by an in-place edit of the staged `memory.rs`; `git diff
+--quiet` exited 0 before and after every one. With the read law's break applied, twenty runs on
+fresh seeds caught it twenty times. All were run on the final generator, after the review's
+changes.
 
 ## Blocked / handed off
 
-- [ ] None expected.
+- [x] None.
 
 ## Review
 
-*Filled in when the work closes.*
+`MemoryLedger` and `MemorySeenIds` keep the four store laws; run's eight laws now run on them; the
+doubles are gone; and the overview's worked example passes end to end. Against the stubs all four
+store laws failed with counterexamples; each then failed against its break, re-run on the final
+generator.
+
+Rulings:
+
+- A load names the address just committed one time in two, otherwise a client from
+  `[1, 2, 3, 0, u16::MAX, 4]` and a generated tx id. Drawn blind, as planned, the read law caught
+  its break in 36 of 40 runs in the pre-flight's probe; now in 20 of 20.
+- `address` draws clients from `[1, 2, 3, 0, u16::MAX]`, so the store laws meet every boundary id:
+  a store losing clients 0 and `u16::MAX` passed all 26 laws before, since the run laws send those
+  clients only rejected commands; it now fails at the first case.
+- One time in two, a load or a snapshot of the empty ledger comes before the first commit: a
+  store whose empty ledger loads an opened account now fails the read law.
+
+The worked example passes on its first run, a characterisation test as planned; run once against
+a core break, a chargeback that keeps the lock, it fails.
+
+Code review of the staged diff: no blocker; one should-fix, acted on as ruled above; three nits,
+all fixed: the empty ledger is read; the `Default` docs state what they build; `run.rs` names
+`Printed` one way.
+
+Review questions, `domain-modeling` (DM) and `curry-howard` (CH), for every type this ticket adds:
+
+| Type | Name (DM 1) and kind (DM 2) | Proposition (CH 1, 2) | Keys, absences, derivations (DM 3–5, CH 3, 6) | What only a law states (CH 7) |
+|---|---|---|---|---|
+| `MemoryLedger` | *Stores defined by their laws*; a store | accounts by client id and deposits by address, its failure uninhabited | entities under their keys; a commit of no deposit removes the key, so history holds no charged-back deposit | the four store laws |
+| `MemorySeenIds` | the same record; a store | the tx ids seen, its failure uninhabited | — | a recorded id stays recorded |
+| `Operation` (test) | a call on the ledger port | a commit with exactly what `commit` takes, a load, or a snapshot | — | — |
+| `Reference` (test) | what the store laws say a ledger holds | the last committed account per client and deposit per address | — | — |
+
+No type here carries a file format into `domain` (DM 6) or changes a value it holds (DM 7); no
+`bool`, tuple or bare primitive hides a name (CH 4); no function's return admits a case it never
+produces (CH 5).

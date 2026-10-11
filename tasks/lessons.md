@@ -70,3 +70,28 @@ now addresses the footprint by the command's client and tx id, from outside, and
 - When a record defines a term in one sentence, make the type read as that sentence.
 - These rules graduated into `.claude/skills/domain-modeling/SKILL.md`, where the failure is the
   skill's worked example.
+
+## 2026-10-10 — Hand-rolled the property harness a standard crate provides
+
+**What happened.** The `rust-properties` skill, and the stage 1 plan after it, build every
+property test on a std-only harness written for this project: a seeded generator, `for_all`,
+replay by seed, edge-weighted generators, and no shrinking. Midway through the build, the user
+asked why a standard property-testing library was not used instead of reinventing one. The tests
+stay on the harness until stage 1 lands, then move onto `proptest`.
+
+**What I got wrong.**
+
+1. I read the dependency rule as a reason to write the library myself. The rule asks for a
+   person's approval before a new crate, and a dev-dependency can be proposed with its rationale
+   and alternatives like any other; neither the skill nor the plan proposed one.
+2. I weighed the harness by the crates it keeps out of the build graph, and left out what it
+   costs: generators written case by case, failing cases reported unshrunk, and a harness the
+   project maintains.
+
+**Rules for next time.**
+
+- Before hand-rolling what a widely used crate already does, propose the crate to the person with
+  its rationale, its cost in the build graph and the alternatives, and let them decide; the
+  dependency rule puts the standard library first, and asks for approval, not abstinence.
+- When a plan or a skill copies infrastructure into the tree (a harness, a parser, a runtime),
+  name the crate it stands in for, so the person chooses between them.

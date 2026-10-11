@@ -7,8 +7,8 @@ values — are enforced by the compiler, the lint gate and review.
 
 ## Status
 
-Being built: the library's domain model first, then the core, the runtime and the in-memory
-stores; the command-line program follows.
+The library is built: the domain model, the core, the sequential runtime and the in-memory stores,
+each held to its laws. The command-line runtime is next.
 
 ## Setup
 
@@ -58,6 +58,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   └── main.rs       the composition root

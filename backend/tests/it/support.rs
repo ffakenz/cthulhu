@@ -2,7 +2,6 @@
 
 pub(crate) mod generate;
 pub(crate) mod model;
-pub(crate) mod stores;
 
 use std::ffi::OsString;
 use std::fmt::{self, Debug};
@@ -143,5 +142,13 @@ fn seed() -> Result<Seed, Failure> {
     match pinned.to_str().and_then(Seed::read) {
         Some(seed) => Ok(seed),
         None => Err(Failure::UnreadableSeed(pinned)),
+    }
+}
+
+/// The value of a result whose error cannot be built.
+pub(crate) fn infallible<T>(result: Result<T, std::convert::Infallible>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(never) => match never {},
     }
 }

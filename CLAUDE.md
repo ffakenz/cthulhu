@@ -205,6 +205,8 @@ external brief or specification: refer to it by a neutral name only.
 
 - `tasks/todo.md` — the plan of record for the current piece of work: checkable items, and a
   Review section when it closes.
+- `tasks/<name>-plan.md` — a closed plan, kept verbatim before the next piece of work replaces
+  `todo.md`; every reference that named it as `todo.md`, quoted prompts aside, names this file.
 - `tasks/<ticket>.md` — one ticket, copied from `tasks/TEMPLATE.md`.
 - `tasks/lessons.md` — append an entry after any correction.
 - `docs/prompts/NNNN-kebab-case-title.md` — one prompt history per working session, written

@@ -1,6 +1,6 @@
 # stage-1-run — the sequential reference runtime over the store ports
 
-Plan of record: `tasks/todo.md`
+Plan of record: `tasks/stage-1-library-plan.md`
 
 ## Context
 
@@ -33,7 +33,7 @@ Files: `backend/src/lib.rs`, `backend/src/run.rs`, `backend/src/run/port.rs`,
 - [x] `pub mod run;` in `lib.rs`. `run.rs` declares `mod port; mod row; mod summary;` and
       re-exports every public item, so the API is `backend::run::{run, LedgerStore, SeenIds, Row,
       RowError, SourceError, RunError, Summary, Accounts, Report}`.
-- [x] The types and signatures exactly as `tasks/todo.md` § Interfaces gives them, with `Display`
+- [x] The types and signatures exactly as `tasks/stage-1-library-plan.md` § Interfaces gives them, with `Display`
       and `error::Error` for `RowError`, `SourceError` and `RunError`.
 - [x] `Report` keeps `BTreeMap<Reason, NonZeroU64>` and `BTreeMap<RowError, NonZeroU64>`. Its
       `pub(super)` `EMPTY`, `with_rejection` and `with_malformed` count through one private
@@ -59,7 +59,7 @@ Files: `backend/tests/it/main.rs`, `backend/tests/it/support.rs`,
       `MalformedRow` edge in `Edge` and `EDGES`, and `row(&InputRow) -> Row`; rewrite `command` as
       `match row(input) { Row::Parsed(command) => Some(command), Row::Malformed(_) => None }`, so
       one function reads an input row. Add `Unique`, `unique` and `interleave` as
-      `tasks/todo.md` § Generators states.
+      `tasks/stage-1-library-plan.md` § Generators states.
 - [x] `support/model.rs`: the naive engine, `PrintedAccount`, `Printed` and
       `printed(rows: &[InputRow]) -> Printed`, below.
 - [x] `tests/it/run.rs` with `mod run;` in `main.rs`; the helpers below and the eight laws.
@@ -300,10 +300,10 @@ File: `backend/tests/it/run.rs`. Each runs `support::for_all(label, 500, …)` o
 
 - [x] `CLAUDE.md` and `README.md` layouts: add `run.rs` and `run/`.
 - [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] The two forbidden-name greps of `tasks/stage-1-library-plan.md` § Global constraints: both silent.
 - [x] `make ci` — green; paste the test summary line here. `test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`.
-- [x] Tick this ticket and its line in `tasks/todo.md`; stage explicit paths; commit with
-      `git commit -F` as `tasks/todo.md` § Commits gives it.
+- [x] Tick this ticket and its line in `tasks/stage-1-library-plan.md`; stage explicit paths; commit with
+      `git commit -F` as `tasks/stage-1-library-plan.md` § Commits gives it.
 
 ## Law evidence
 

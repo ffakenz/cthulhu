@@ -1,6 +1,6 @@
 # stage-1-memory — in-memory stores that keep the store laws, and the library end to end
 
-Plan of record: `tasks/todo.md`
+Plan of record: `tasks/stage-1-library-plan.md`
 
 ## Context
 
@@ -27,12 +27,12 @@ Files: `backend/src/lib.rs`, `backend/src/memory.rs`, `backend/tests/it/main.rs`
 `backend/tests/it/memory.rs`.
 
 - [x] `pub mod memory;` in `lib.rs`; `mod memory;` in `tests/it/main.rs`.
-- [x] `memory.rs` with `MemoryLedger` and `MemorySeenIds` as `tasks/todo.md` § Interfaces gives
+- [x] `memory.rs` with `MemoryLedger` and `MemorySeenIds` as `tasks/stage-1-library-plan.md` § Interfaces gives
       them, and stubs: `load` answers `Ok(None)`, `commit` writes nothing, `snapshot` is empty,
       `sight` always answers `First`.
 - [x] `support.rs`: `pub(crate) fn infallible<T>(result: Result<T, Infallible>) -> T`, by
       `match result { Ok(value) => value, Err(never) => match never {} }`.
-- [x] `support/generate.rs`: `address`, as `tasks/todo.md` § Generators states.
+- [x] `support/generate.rs`: `address`, as `tasks/stage-1-library-plan.md` § Generators states.
 - [x] `tests/it/memory.rs`: the generator and reference below, and the four laws.
 - [x] Red: `cargo test --test it memory::` — all four fail with counterexamples (a stub that keeps
       nothing breaks every store law); record the failure lines.
@@ -182,13 +182,13 @@ fn overview_printed() -> Printed {
       in-memory stores, with their laws — and the command-line runtime is next. `CLAUDE.md` §
       Status says the same.
 - [x] `CLAUDE.md` and `README.md` layouts: add `memory.rs`.
-- [x] `tasks/todo.md`: tick Task 4. Its Review section waits for Closing, which folds it into
+- [x] `tasks/stage-1-library-plan.md`: tick Task 4. Its Review section waits for Closing, which folds it into
       this commit.
 - [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] The two forbidden-name greps of `tasks/stage-1-library-plan.md` § Global constraints: both silent.
 - [x] `make ci` — green; paste the test summary line here. `test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`.
 - [x] Stage explicit paths, including the deleted `support/stores.rs`; commit with
-      `git commit -F` as `tasks/todo.md` § Commits gives it.
+      `git commit -F` as `tasks/stage-1-library-plan.md` § Commits gives it.
 
 ## Law evidence
 

@@ -23,7 +23,7 @@ A picture of the decisions in `docs/adr/`, each named by its title.
 ### In detail
 
 *Effects behind ports*, *A pure core*, *State changes only through events*, *Stores defined by
-their laws*.
+their laws*, *Entities identified by their keys*.
 
 ```text
  input file
@@ -58,8 +58,8 @@ their laws*.
 
 - `[port]` marks a port; `(…)` is the implementation `main.rs` supplies: an adapter, or stdout for
   `Write`.
-- The footprint is the client's account and at most one of its deposits. Dispute commands skip
-  `SeenIds`.
+- The footprint is the client's account and at most one of its deposits, loaded and committed at
+  the command's address: its client and tx id. Dispute commands skip `SeenIds`.
 - `decide` only checks conditions; `evolve` only computes, and fails only on overflow, which
   rejects the command. A rejection changes no balance; its commit stores only an account the
   step opened.
@@ -94,10 +94,12 @@ one partition, and the reference that every later runtime must equal.
 │          Row, RowError, SourceError, RunError, Summary,        │
 │          Accounts, Report                                      │
 ├────────────────────────────────────────────────────────────────┤
-│ core     decide_client, decide_dispute, evolve: pure, total    │
+│ core     open, decide_client, decide_dispute, evolve: pure,    │
+│          total; Overflow, evolve's one failure                 │
 ├────────────────────────────────────────────────────────────────┤
-│ domain   ids, Amount, Balance, Account, Deposit, Status,       │
-│          commands, events, reasons, Sight                      │
+│ domain   ids, Address, Amount, Balance, Account, Lock,         │
+│          Deposit, Status, Footprint, commands, events,         │
+│          reasons, Sight                                        │
 │          (rust_decimal)                                        │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -107,13 +109,15 @@ implements the source over `Read` and renders onto `Write`, and only `main.rs` t
 
 | Module | Holds | Uses |
 |---|---|---|
-| `domain` | `ClientId`, `TxId`, `Amount`, `Balance`, `Account`, `Deposit`, `Status`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `Reason`, `Sight` | `rust_decimal` |
-| `core` | `decide_client`, `decide_dispute`, `evolve` | `domain` |
+| `domain` | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` | `rust_decimal` |
+| `core` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
 | `run` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
 | `memory` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
 | `csv_io` | `CsvRow`, `CsvSource`, `render_csv` | `csv`, `serde`, `domain`, `run` |
 | `main.rs` | the argument, the input file, stdio, `ExitCode` | the library |
 
+- `domain` is the model in the records' terms: values, entities and messages, each entity reached
+  by its key (*A domain model in the records' language*, *Entities identified by their keys*).
 - No module but `main.rs` touches `std::env`, `std::fs`, stdout or stderr.
 - Output is deterministic: commands apply in arrival order, `Accounts` iterates by client id, and
   nothing reads the clock or hash order.

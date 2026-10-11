@@ -11,15 +11,16 @@ the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-No product code yet. The workspace, its gate (`make ci`), these conventions, the decision log, the
-knowledge base and the engine's design (`docs/`) are in place.
+The library is built: the domain, the core, the sequential runtime and the in-memory stores, each
+held to its laws. The command-line runtime is next. The workspace, its gate (`make ci`), these
+conventions, the decision log, the knowledge base and the engine's design (`docs/`) are in place.
 
 ## Repository layout
 
 ```text
 cthulhu/
 ├── Cargo.toml            virtual workspace: members, shared package fields, lints
-├── Cargo.lock            workspace crates only (`make deps`)
+├── Cargo.lock            locked versions; `make deps` gates the build graph, not this file
 ├── rust-toolchain.toml   pinned toolchain: 1.88.0 with clippy and rustfmt
 ├── rustfmt.toml          formatting
 ├── clippy.toml           lint settings and disallowed methods
@@ -27,9 +28,16 @@ cthulhu/
 ├── README.md             setup and usage
 ├── CLAUDE.md             this file
 ├── backend/              package `backend`, binary `cthulhu`
-│   └── src/
-│       ├── lib.rs        the library: core, runtime and adapters
-│       └── main.rs       the composition root
+│   ├── src/
+│   │   ├── lib.rs        the library: core, runtime and adapters
+│   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
+│   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
+│   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
+│   │   ├── run/          the store ports, rows and run errors, the summary views
+│   │   └── main.rs       the composition root
+│   └── tests/it/         the black-box test crate: laws, strategies and the model
 ├── docs/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
@@ -54,7 +62,8 @@ everything it builds is passed down as a value.
 |---|---|---|
 | Composition | Small functions and narrow traits, composed; a cross-cutting concern wraps a port instead of branching inside it | `functional-architecture`, `rust-wiring` |
 | Immutability and referential transparency | Same input, same output, no observable side effect; `let` by default, `&` before `&mut` before owned | `functional-architecture`, `rust-effects` |
-| Types are propositions — parse, don't validate | Parse input once, at the boundary, into a type that cannot hold a bad value; its existence is the proof | `functional-architecture` |
+| Types are propositions — parse, don't validate | Parse input once, at the boundary, into a type that cannot hold a bad value; its existence is the proof; each type states the domain's proposition, no weaker | `functional-architecture`, `curry-howard` |
+| The records' language | Every domain name comes from the records' terms; each domain type is a value, an entity or a message, and an entity's identity is its key, never a field | `domain-modeling` |
 | Total functions only | A value for every input the type admits; what cannot be honoured is a variant in the return type, never a panic | `functional-architecture` |
 | Errors are values | A closed enum per boundary, inside a `Result`, classified once where the failure enters; a panic is a bug | `rust-errors` |
 | Absence has a type | `Option`, never a sentinel or a `Default` meaning "not set" | `functional-architecture` |
@@ -66,14 +75,15 @@ everything it builds is passed down as a value.
 
 ## Dependencies
 
-Standard library first. The admitted crates are `csv`, `serde` and `rust_decimal`, with the 13
-crates they build on, admitted by a decision record. Never add any other dependency — no
-`cargo add`, no new line in a manifest's dependency tables — without explicit approval from a
-person: propose it with the rationale and the alternatives considered, wait for sign-off, then
-record it as a decision record. `make deps` fails the gate when `Cargo.lock` resolves a package
-from outside the workspace. When the admitted crates are first used, it checks the build graph
-(`cargo tree`, every dependency kind) against them instead, since `Cargo.lock` also lists
-optional crates that are never built. `cargo add` and `cargo install` ask for consent.
+Standard library first. The program's admitted crates are `csv`, `serde` and `rust_decimal`, with
+the 13 crates they build on; the tests' are `proptest`, with the 13 more it builds on; a decision
+record admits both sets. Never add any other dependency — no `cargo add`, no new line in a
+manifest's dependency tables — without explicit approval from a person: propose it with the
+rationale and the alternatives considered, wait for sign-off, then record it as a decision record.
+`make deps` fails the gate when the build graph (`cargo tree`, every dependency kind, feature and
+target) holds a package that is neither a workspace member nor an admitted crate, or when the
+program's graph holds a crate admitted for tests only. It reads the graph, not `Cargo.lock`, which
+also lists optional crates that are never built. `cargo add` and `cargo install` ask for consent.
 
 ## Build, test, run
 
@@ -153,7 +163,9 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
   under test.
 - Nothing in production code may exist only for testing.
 - Black-box tests live in `backend/tests/it` and see only the public API: one test crate,
-  `main.rs` plus modules that mirror `src`, and `support.rs` for helpers once one is needed.
+  `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
+  each law on `proptest`, the strategies in `support/generate.rs` and the naive model in
+  `support/model.rs`.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments
@@ -205,11 +217,13 @@ Skills live in `.claude/skills/<name>/SKILL.md`; the agent in `.claude/agents/co
 | Name | When to use |
 |---|---|
 | `functional-architecture` | Writing or reviewing any code: the shape it must take. `references/rust.md` is its Rust spelling |
+| `domain-modeling` | Naming or shaping a domain type, adding a term, choosing an id or a key, mapping a file format onto the domain |
+| `curry-howard` | Designing, reading or reviewing a type or a signature as the claim it makes; strengthening a weak one; choosing a DSL |
 | `rust-effects` | Code that reads the clock, the environment or the arguments, or touches files, the network, processes, threads, stdio or hash order |
 | `rust-errors` | Defining an error enum, classifying a foreign failure, deciding what retries, mapping a failure to an exit code |
 | `rust-resources` | Acquiring anything that must be released: files, sockets, child processes, threads, buffered writers |
 | `rust-wiring` | Changing `main.rs`: building adapters, parsing configuration, composing decorators, adding a module |
-| `rust-properties` | Writing a property test or a generator |
+| `rust-properties` | Writing a property test or a strategy |
 | `architecture-decisions` | Making, reversing or looking up an architecture decision; starting a record |
 | `review-and-planning` | Resolving review comments, reviewing a diff, planning a multi-step change, proposing a dependency, writing a test that must fail first |
 | `prompt-history` | Closing a working session: recording its prompts in `docs/prompts/` |

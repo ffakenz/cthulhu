@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a diff or set of changes for correctness and adherence to CLAUDE.md and the skills — total functions, typed failures, the functional core / composition root split, and the lint gate. Use after implementing a change, before committing.
+description: Reviews a diff or set of changes for correctness and adherence to CLAUDE.md and the skills — total functions, typed failures, types that state the domain's propositions, the domain model, the functional core / composition root split, and the lint gate. Use after implementing a change, before committing.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -12,8 +12,9 @@ Before judging anything:
 
 1. Read `CLAUDE.md`, `.claude/skills/functional-architecture/SKILL.md` and
    `.claude/skills/functional-architecture/references/rust.md`. Then read every other skill the
-   change touches — `rust-effects`, `rust-errors`, `rust-resources`, `rust-wiring`,
-   `rust-properties` — and the decision records that name the files it changes.
+   change touches — `curry-howard`, `domain-modeling`, `rust-effects`, `rust-errors`,
+   `rust-resources`, `rust-wiring`, `rust-properties` — and the decision records that name the
+   files it changes.
 2. Run `make ci` and read the output, not just the exit code. A failure is a blocker, except a
    red commit's new test failing for the reason it states.
 3. Read the whole change, staged and unstaged; read the `Cargo.lock` diff on its own.
@@ -31,15 +32,25 @@ Check, in this order:
    place a concrete adapter, the clock, the environment, the arguments or stdio is touched, and
    the only file under `backend/src` that carries `#[expect(clippy::disallowed_methods, …)]`. A
    port's trait is declared beside its consumer. Each boundary has one error enum, never shared.
-3. **Functional discipline.** Nothing from the Banned and review-only lists in
+3. **Domain model.** Every domain name comes from `docs/overview.md` § Terms or a record. Each
+   domain type is a value, an entity or a message, with its fields private and its readings as
+   methods. No value carries the key it is stored under, nothing that could be derived is stored,
+   and no file format's shape reaches `domain`. Every type the change adds, test types included,
+   states the domain's proposition, no weaker: no field present only in one case, no `bool` or
+   positional tuple hiding a name, no return wider than what the function produces. A
+   generator's raw input is the exception: it stays as weak as the text a source reads, on
+   purpose (`.claude/skills/rust-properties/SKILL.md`). The review questions in
+   `.claude/skills/domain-modeling/SKILL.md` and `.claude/skills/curry-howard/SKILL.md` have an
+   answer for every type the change touches.
+4. **Functional discipline.** Nothing from the Banned and review-only lists in
    `.claude/skills/functional-architecture/references/rust.md`. Every
    `#[expect(lint, reason = "…")]` carries a reason that is true of the code it covers. No
    `#[allow]`, and no inner `#![…]` lint attribute.
-4. **Tests.** A behaviour change comes with the test that drove it. Tests assert behaviour and
+5. **Tests.** A behaviour change comes with the test that drove it. Tests assert behaviour and
    properties, black box, through the public API from `backend/tests/it`; property tests are
    named `prop_<law>`. No test of construction, derives or field access, and none that another
    test already covers. Nothing in production code exists only for a test.
-5. **Clarity.** `CLAUDE.md` § Comments holds for every comment, doc comment and `reason`: it
+6. **Clarity.** `CLAUDE.md` § Comments holds for every comment, doc comment and `reason`: it
    says what the code is and how it behaves; decisions, alternatives, trade-offs, plans and
    record numbers stay out. Names and types carry the meaning. No dead code.
 

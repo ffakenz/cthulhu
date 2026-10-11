@@ -2,6 +2,7 @@
 
 pub(crate) mod generate;
 pub(crate) mod model;
+pub(crate) mod stores;
 
 use std::ffi::OsString;
 use std::fmt::{self, Debug};

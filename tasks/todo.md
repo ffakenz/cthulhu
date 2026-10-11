@@ -540,7 +540,7 @@ here and fills its ticket's evidence.
 
 ### Task 3: stage-1-run
 
-- [ ] `tasks/stage-1-run.md`: ports, rows, errors, projections and the sequential runtime; eight
+- [x] `tasks/stage-1-run.md`: ports, rows, errors, projections and the sequential runtime; eight
       laws over store doubles, the rejection law among them.
 
 ### Task 4: stage-1-memory

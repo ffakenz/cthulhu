@@ -1,11 +1,13 @@
 //! Generators: raw input as a source would deliver it, one draw in four at an edge.
 
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
 
 use backend::domain::{
     Address, Amount, ClientCommand, ClientEvent, ClientId, Command, DisputeCommand, DisputeEvent,
     Event, TxId,
 };
+use backend::run::{Row, RowError};
 
 use super::{EDGE_ODDS, Gen};
 
@@ -235,6 +237,10 @@ fn move_amount(random: &mut Gen) -> String {
 pub(crate) enum InputRow {
     /// A row whose fields read: its kind, its client and tx id, and its amount's text, if any.
     Fields { kind: Kind, client: u16, tx: u32, amount: Option<String> },
+    /// A row with a field that does not read.
+    Unreadable,
+    /// A row with more fields than the header names.
+    TooManyFields,
 }
 
 /// What a row asks for: one of the five commands.
@@ -277,21 +283,42 @@ pub(crate) fn chargeback(client: u16, tx: u32) -> InputRow {
     InputRow::Fields { kind: Kind::Chargeback, client, tx, amount: None }
 }
 
-/// The command `row` reads as: `None` when a client command's amount is missing or does not
-/// parse. A dispute command's amount is ignored.
-pub(crate) fn command(row: &InputRow) -> Option<Command> {
-    let InputRow::Fields { kind, client, tx, amount } = row;
+/// What a source makes of `input`: the command it reads as, or why it is malformed. A client
+/// command needs an amount that parses; a dispute command's amount is ignored.
+pub(crate) fn row(input: &InputRow) -> Row {
+    let (kind, client, tx, text) = match input {
+        InputRow::Unreadable => return Row::Malformed(RowError::Unreadable),
+        InputRow::TooManyFields => return Row::Malformed(RowError::TooManyFields),
+        InputRow::Fields { kind, client, tx, amount } => (kind, client, tx, amount),
+    };
     let address = Address::new(ClientId::from(*client), TxId::from(*tx));
-    let parsed = || amount.as_deref()?.parse::<Amount>().ok();
-    Some(match kind {
-        Kind::Deposit => Command::Client(ClientCommand::Deposit { address, amount: parsed()? }),
-        Kind::Withdrawal => {
-            Command::Client(ClientCommand::Withdrawal { address, amount: parsed()? })
+    let parsed = || match text.as_deref() {
+        None => Err(RowError::MissingAmount),
+        Some(spelling) => spelling.parse::<Amount>().map_err(RowError::InvalidAmount),
+    };
+    let command = match kind {
+        Kind::Deposit => {
+            parsed().map(|amount| Command::Client(ClientCommand::Deposit { address, amount }))
         }
-        Kind::Dispute => Command::Dispute(DisputeCommand::Dispute(address)),
-        Kind::Resolve => Command::Dispute(DisputeCommand::Resolve(address)),
-        Kind::Chargeback => Command::Dispute(DisputeCommand::Chargeback(address)),
-    })
+        Kind::Withdrawal => {
+            parsed().map(|amount| Command::Client(ClientCommand::Withdrawal { address, amount }))
+        }
+        Kind::Dispute => Ok(Command::Dispute(DisputeCommand::Dispute(address))),
+        Kind::Resolve => Ok(Command::Dispute(DisputeCommand::Resolve(address))),
+        Kind::Chargeback => Ok(Command::Dispute(DisputeCommand::Chargeback(address))),
+    };
+    match command {
+        Ok(command) => Row::Parsed(command),
+        Err(error) => Row::Malformed(error),
+    }
+}
+
+/// The command `input` reads as, `None` for a malformed row.
+pub(crate) fn command(input: &InputRow) -> Option<Command> {
+    match row(input) {
+        Row::Parsed(command) => Some(command),
+        Row::Malformed(_) => None,
+    }
 }
 
 /// The edges a run visits, one draw in four.
@@ -311,17 +338,24 @@ enum Edge {
     ExactBalance,
     /// A deposit or a withdrawal of an amount at or past an edge of the grammar.
     BoundaryAmount,
+    /// An unreadable row, a row with too many fields, or a deposit or a withdrawal with no amount
+    /// or with an amount edge a source delivers.
+    MalformedRow,
 }
 
 /// Every edge, each as likely.
-const EDGES: [Edge; 6] = [
+const EDGES: [Edge; 7] = [
     Edge::RepeatedTx,
     Edge::UnknownTx,
     Edge::ForeignTx,
     Edge::AfterChargeback,
     Edge::ExactBalance,
     Edge::BoundaryAmount,
+    Edge::MalformedRow,
 ];
+
+/// Amount edges no source delivers: it reads an empty field as absent and trims every field.
+const UNDELIVERED: [&str; 3] = ["", " 1", "1 "];
 
 /// Every kind, each as likely.
 const KINDS: [Kind; 5] =
@@ -475,6 +509,7 @@ impl Draft {
             Edge::AfterChargeback => self.after_chargeback(random),
             Edge::ExactBalance => self.exact_balance(random),
             Edge::BoundaryAmount => self.boundary_amount(random),
+            Edge::MalformedRow => self.malformed_row(random),
         }
     }
 
@@ -581,6 +616,89 @@ impl Draft {
         } else {
             self.push_withdrawal(client, tx, amount);
         }
+    }
+
+    /// A malformed row: unreadable, with too many fields, or a deposit or a withdrawal on a fresh
+    /// tx id with no amount or with an amount edge a source delivers.
+    fn malformed_row(&mut self, random: &mut Gen) {
+        let client = random.pick(&CLIENTS).copied().unwrap_or_default();
+        let kind = if random.one_in(EVEN_ODDS) { Kind::Deposit } else { Kind::Withdrawal };
+        let delivered: Vec<&str> =
+            AMOUNT_EDGES.into_iter().filter(|spelling| !UNDELIVERED.contains(spelling)).collect();
+        let row = match random.below(FOUR) {
+            0 => InputRow::Unreadable,
+            1 => InputRow::TooManyFields,
+            2 => InputRow::Fields { kind, client, tx: self.fresh.tx(), amount: None },
+            _ => {
+                let spelling = random.pick(&delivered).copied().unwrap_or_default();
+                InputRow::Fields {
+                    kind,
+                    client,
+                    tx: self.fresh.tx(),
+                    amount: Some(spelling.to_owned()),
+                }
+            }
+        };
+        self.rows.push(row);
+    }
+}
+
+/// Rows whose deposits and withdrawals name distinct tx ids, none malformed: the reordering law's
+/// hypothesis. Only `unique` and `interleave` build one.
+#[derive(Debug, Clone)]
+pub(crate) struct Unique(Vec<InputRow>);
+
+impl Unique {
+    /// The rows, in order.
+    pub(crate) fn rows(&self) -> &[InputRow] {
+        &self.0
+    }
+}
+
+/// `rows` without its malformed rows, and without each deposit or withdrawal whose tx id an
+/// earlier one used.
+pub(crate) fn unique(rows: &[InputRow]) -> Unique {
+    let mut used = BTreeSet::new();
+    Unique(
+        rows.iter()
+            .filter(|input| match row(input) {
+                Row::Malformed(_) => false,
+                Row::Parsed(Command::Client(command)) => used.insert(command.address().tx()),
+                Row::Parsed(Command::Dispute(_)) => true,
+            })
+            .cloned()
+            .collect(),
+    )
+}
+
+/// The rows of `unique`, each client's in their order, the clients taking turns at random.
+pub(crate) fn interleave(random: &mut Gen, unique: &Unique) -> Unique {
+    let mut queues: BTreeMap<ClientId, VecDeque<InputRow>> = BTreeMap::new();
+    for input in unique.rows() {
+        if let Some(client) = client_of(input) {
+            queues.entry(client).or_default().push_back(input.clone());
+        }
+    }
+    let mut merged = Vec::new();
+    while let Some(client) = random.pick(&waiting(&queues)).copied() {
+        if let Some(input) = queues.get_mut(&client).and_then(VecDeque::pop_front) {
+            merged.push(input);
+        }
+    }
+    Unique(merged)
+}
+
+/// The clients with rows still to take.
+fn waiting(queues: &BTreeMap<ClientId, VecDeque<InputRow>>) -> Vec<ClientId> {
+    queues.iter().filter(|(_, queue)| !queue.is_empty()).map(|(&client, _)| client).collect()
+}
+
+/// The client a row's command names, `None` for a malformed row.
+fn client_of(input: &InputRow) -> Option<ClientId> {
+    match row(input) {
+        Row::Parsed(Command::Client(command)) => Some(command.address().client()),
+        Row::Parsed(Command::Dispute(command)) => Some(command.address().client()),
+        Row::Malformed(_) => None,
     }
 }
 

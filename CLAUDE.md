@@ -33,6 +33,8 @@ cthulhu/
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
+│   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
+│   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, generators and the model
 ├── docs/

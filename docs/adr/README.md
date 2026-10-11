@@ -30,3 +30,4 @@ Records here state architecture principles. How the engine treats its input is i
 - [12. csv, serde and rust_decimal as dependencies](0012-csv-serde-and-rust-decimal-as-dependencies.md)
 - [13. A domain model in the records' language](0013-a-domain-model-in-the-records-language.md)
 - [14. Entities identified by their keys](0014-entities-identified-by-their-keys.md)
+- [15. csv, serde, rust_decimal and proptest as dependencies](0015-csv-serde-rust-decimal-and-proptest-as-dependencies.md)

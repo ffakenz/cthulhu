@@ -89,18 +89,23 @@ writing it on the standard library is always one — then wait for a person to s
 sign-off is a decision record ([[architecture-decisions]]). Fewer dependencies is fewer things to
 prove correct, patch, and audit.
 
+The rule asks for approval, not abstinence. Before hand-rolling what a widely used crate already
+does — a property-test runner, a parser, a runtime — propose the crate with its rationale, its cost
+in the build graph and the alternatives, and let the person choose. A plan or a skill that copies
+infrastructure into the tree names the crate it stands in for.
+
 `make deps` is the proof: it fails when the build graph (`cargo tree`, every dependency kind,
-feature and target) holds a package that is neither a workspace member nor in its admitted set,
+feature and target) holds a package that is neither a workspace member nor an admitted crate,
 and `.claude/settings.json` asks before `cargo add` or `cargo install` runs. It reads the graph,
 not `Cargo.lock`, which also lists optional crates that are never built. An approved crate is
-admitted by adding it to that set together with its decision record, never by weakening the
-check.
+admitted by adding it to `ADMITTED`, or to `ADMITTED_DEV` when only the tests build it, together
+with its decision record, never by weakening the check.
 
 Two more rules keep holding without a reviewer:
 
-- **A test-only dependency must be unreachable from production.** Once one is approved,
-  `make deps` grows a check from the graph the build reports — `cargo tree --edges no-dev` must
-  not list it — never from reading manifests.
+- **A test-only dependency must be unreachable from production.** `make deps` checks it from the
+  graph the build reports, never from reading manifests: `cargo tree --edges no-dev` may list only
+  workspace members and `ADMITTED` crates.
 - **Check the source and the build graph, not a compiled binary.** Compilation inlines, mangles and
   can strip the names a search would look for, so a scan of the binary passes for the wrong
   reason.

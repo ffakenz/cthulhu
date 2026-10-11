@@ -19,8 +19,9 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on.
-`rust_decimal` is in use; `csv` and `serde` arrive with the CSV adapters.
+Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; for tests
+only, `proptest`, with the 13 more it builds on. `rust_decimal` and `proptest` are in use; `csv`
+and `serde` arrive with the CSV adapters.
 
 ## Usage
 
@@ -62,7 +63,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   └── main.rs       the composition root
-│   └── tests/it/         the black-box test crate: laws, generators and the model
+│   └── tests/it/         the black-box test crate: laws, strategies and the model
 ├── docs/
 │   ├── overview.md       what the engine does
 │   ├── architecture.md   a picture of the architecture decisions

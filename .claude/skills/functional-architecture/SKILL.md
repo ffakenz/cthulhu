@@ -133,7 +133,7 @@ the copy that goes stale.
 - [references/rust.md](references/rust.md): the Rust spelling, the Banned table, the review-only list.
 - [[rust-effects]] (effects and time) · [[rust-errors]] (foreign failures, classified once) ·
   [[rust-resources]] (ownership and release) · [[rust-wiring]] (the composition root) ·
-  [[rust-properties]] (laws, generators and the harness).
+  [[rust-properties]] (laws, strategies and their runner).
 
 ## Verify
 

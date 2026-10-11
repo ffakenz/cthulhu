@@ -95,3 +95,5 @@ stay on the harness until stage 1 lands, then move onto `proptest`.
   dependency rule puts the standard library first, and asks for approval, not abstinence.
 - When a plan or a skill copies infrastructure into the tree (a harness, a parser, a runtime),
   name the crate it stands in for, so the person chooses between them.
+- These rules graduated into `.claude/skills/review-and-planning/SKILL.md`, under its dependency
+  rule; the tests moved onto `proptest` after stage 1.

@@ -1,15 +1,18 @@
-//! Generators: raw input as a source would deliver it, one draw in four at an edge.
+//! Strategies: raw input as a source would deliver it, one draw in four at an edge.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::num::NonZeroU64;
 
 use backend::domain::{
     Address, Amount, ClientCommand, ClientEvent, ClientId, Command, DisputeCommand, DisputeEvent,
     Event, TxId,
 };
 use backend::run::{Row, RowError};
-
-use super::{EDGE_ODDS, Gen};
+use proptest::arbitrary::any;
+use proptest::collection::{SizeRange, vec};
+use proptest::option;
+use proptest::prop_oneof;
+use proptest::sample::{Index, select};
+use proptest::strategy::{Just, Strategy};
 
 /// Amount spellings at the edges of the grammar: empty, zero, a bare or trailing point, a sign, an
 /// exponent, a separator, padding and a non-ASCII digit; then amounts that parse or just miss:
@@ -45,9 +48,6 @@ pub(crate) const AMOUNT_EDGES: [&str; 27] = [
     "18446744073709551616",
 ];
 
-/// One draw in two.
-pub(crate) const EVEN_ODDS: NonZeroU64 = NonZeroU64::MIN.saturating_add(1);
-
 /// The ASCII digits.
 const DIGITS: [char; 10] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -60,29 +60,30 @@ const AMOUNT_CHARACTERS: [char; 18] = [
 /// Raw amount text: one draw in four an edge; otherwise, as often each, a number-shaped spelling
 /// (up to seventeen whole digits, leading zeros included, then an optional point and up to six
 /// fraction digits) or up to eight characters of `AMOUNT_CHARACTERS`.
-pub(crate) fn amount_spelling(random: &mut Gen) -> String {
-    if random.one_in(EDGE_ODDS) {
-        return random.pick(&AMOUNT_EDGES).copied().unwrap_or_default().to_owned();
-    }
-    if random.one_in(EVEN_ODDS) {
-        let whole: String = random.up_to(17, &DIGITS).into_iter().collect();
-        if random.one_in(EVEN_ODDS) {
-            let fraction: String = random.up_to(6, &DIGITS).into_iter().collect();
-            return format!("{whole}.{fraction}");
-        }
-        return whole;
-    }
-    random.up_to(8, &AMOUNT_CHARACTERS).into_iter().collect()
+pub(crate) fn amount_spelling() -> impl Strategy<Value = String> {
+    let number = (spelled(&DIGITS, 0..=17), option::of(spelled(&DIGITS, 0..=6))).prop_map(
+        |(whole, fraction)| match fraction {
+            Some(fraction) => format!("{whole}.{fraction}"),
+            None => whole,
+        },
+    );
+    prop_oneof![
+        2 => select(&AMOUNT_EDGES).prop_map(str::to_owned),
+        3 => number,
+        3 => spelled(&AMOUNT_CHARACTERS, 0..=8),
+    ]
 }
 
-/// Shifts a draw may take: every bit width of a `u64`.
-const BITS: NonZeroU64 = NonZeroU64::MIN.saturating_add(63);
-
-/// Fractions in units of 0.0001: `0..10_000`.
-const FRACTIONS: NonZeroU64 = NonZeroU64::MIN.saturating_add(9_999);
+/// Text of characters drawn from `alphabet`, as many as `lengths` allows, each length as likely.
+fn spelled(
+    alphabet: &'static [char],
+    lengths: impl Into<SizeRange>,
+) -> impl Strategy<Value = String> {
+    vec(select(alphabet), lengths).prop_map(|characters| characters.into_iter().collect())
+}
 
 /// An amount's value as a whole part and a fraction.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct AmountValue {
     /// The whole part.
     pub(crate) whole: u64,
@@ -103,12 +104,10 @@ const AMOUNT_VALUE_EDGES: [AmountValue; 7] = [
 ];
 
 /// An amount's value: one draw in four an edge, otherwise a whole part of random magnitude.
-pub(crate) fn amount_value(random: &mut Gen) -> AmountValue {
-    if random.one_in(EDGE_ODDS) {
-        return random.pick(&AMOUNT_VALUE_EDGES).copied().unwrap_or_default();
-    }
-    let whole = random.next_u64() >> random.below(BITS);
-    AmountValue { whole, fraction: random.below(FRACTIONS) }
+pub(crate) fn amount_value() -> impl Strategy<Value = AmountValue> {
+    let drawn = (any::<u64>(), 0..u64::BITS, 0..10_000_u64)
+        .prop_map(|(bits, shift, fraction)| AmountValue { whole: bits >> shift, fraction });
+    prop_oneof![1 => select(&AMOUNT_VALUE_EDGES), 3 => drawn]
 }
 
 /// Characters for totality: ASCII digits, punctuation and letters, and multi-byte characters (an
@@ -120,12 +119,9 @@ const ANY_CHARACTERS: [char; 18] = [
 
 /// Any text up to sixteen characters: one draw in four an edge (empty, sixty-four zeros then a
 /// one, a multi-byte character after a point).
-pub(crate) fn any_text(random: &mut Gen) -> String {
-    if random.one_in(EDGE_ODDS) {
-        let edges = [String::new(), format!("{}1", "0".repeat(64)), "1.\u{ff11}".to_owned()];
-        return random.pick(&edges).cloned().unwrap_or_default();
-    }
-    random.up_to(16, &ANY_CHARACTERS).into_iter().collect()
+pub(crate) fn any_text() -> impl Strategy<Value = String> {
+    let edges = vec![String::new(), format!("{}1", "0".repeat(64)), "1.\u{ff11}".to_owned()];
+    prop_oneof![1 => select(edges), 3 => spelled(&ANY_CHARACTERS, 0..=16)]
 }
 
 /// Which way a move takes a balance.
@@ -147,17 +143,26 @@ impl Direction {
     }
 }
 
-/// Lengths of a sequence of moves: `0..=12`.
-const MOVES: NonZeroU64 = NonZeroU64::MIN.saturating_add(12);
+/// The most moves a sequence holds.
+const MOVES: usize = 12;
 
 /// Amounts a move takes at its edges: the smallest and the largest.
 const MOVE_EDGES: [&str; 2] = ["0.0001", "999999999999999.9999"];
 
-/// How many amounts lie above zero and below 1000, in units of 0.0001.
-const MOVE_UNITS: NonZeroU64 = NonZeroU64::MIN.saturating_add(9_999_998);
-
 /// The units of 0.0001 in 10^15, the smallest value too large to be an amount.
 const TOO_LARGE_UNITS: u64 = 10_000_000_000_000_000_000;
+
+/// Where a move comes from: its own direction and amount, or the moves before it, which fall back
+/// to its own when they offer none.
+#[derive(Debug, Clone, Copy)]
+enum Origin {
+    /// Its own direction and amount.
+    Own,
+    /// The previous move, the other way.
+    Back,
+    /// The whole balance back to zero, spelled without trailing zeros.
+    ToZero,
+}
 
 /// Up to twelve moves of a balance, each a direction and the text of a valid amount: one draw in
 /// four an edge amount, otherwise `{whole}.{fraction:04}` below 1000 and above zero. One draw in
@@ -165,26 +170,26 @@ const TOO_LARGE_UNITS: u64 = 10_000_000_000_000_000_000;
 /// side; and, while the balance's magnitude is an amount, one draw in four of the rest moves the
 /// whole balance back to zero, spelled without trailing zeros, so a balance whose last decimal is
 /// zero also lands on zero through an amount spelled with fewer decimals.
-pub(crate) fn balance_moves(random: &mut Gen) -> Vec<(Direction, String)> {
-    let count = random.below(MOVES);
-    let mut moves: Vec<(Direction, String)> = Vec::new();
-    for _ in 0..count {
-        let repeat = moves
-            .last()
-            .filter(|_| random.one_in(EDGE_ODDS))
-            .map(|(direction, text)| (direction.opposite(), text.clone()));
-        let next = repeat
-            .or_else(|| {
-                moves
-                    .iter()
-                    .try_fold(0, moved)
-                    .and_then(zeroing)
-                    .filter(|_| random.one_in(EDGE_ODDS))
-            })
-            .unwrap_or_else(|| (direction(random), move_amount(random)));
-        moves.push(next);
-    }
-    moves
+pub(crate) fn balance_moves() -> impl Strategy<Value = Vec<(Direction, String)>> {
+    let any_origin = prop_oneof![
+        9 => Just(Origin::Own),
+        4 => Just(Origin::Back),
+        3 => Just(Origin::ToZero),
+    ];
+    vec((any_origin, direction(), move_amount()), 0..=MOVES).prop_map(|draws| {
+        let mut moves: Vec<(Direction, String)> = Vec::new();
+        for (origin, direction, amount) in draws {
+            let taken = match origin {
+                Origin::Own => None,
+                Origin::Back => {
+                    moves.last().map(|(previous, text)| (previous.opposite(), text.clone()))
+                }
+                Origin::ToZero => moves.iter().try_fold(0, moved).and_then(zeroing),
+            };
+            moves.push(taken.unwrap_or((direction, amount)));
+        }
+        moves
+    })
 }
 
 /// `balance`, in units of 0.0001, after the move `(direction, text)`, its amount read through the
@@ -218,17 +223,15 @@ fn unpadded(units: u64) -> String {
 }
 
 /// A credit or a debit, as often each.
-fn direction(random: &mut Gen) -> Direction {
-    if random.one_in(EVEN_ODDS) { Direction::Credit } else { Direction::Debit }
+fn direction() -> impl Strategy<Value = Direction> {
+    prop_oneof![Just(Direction::Credit), Just(Direction::Debit)]
 }
 
 /// The text of a valid amount: one draw in four an edge, otherwise above zero and below 1000.
-fn move_amount(random: &mut Gen) -> String {
-    if random.one_in(EDGE_ODDS) {
-        return random.pick(&MOVE_EDGES).copied().unwrap_or_default().to_owned();
-    }
-    let units = random.below(MOVE_UNITS).saturating_add(1);
-    format!("{}.{:04}", units / 10_000, units % 10_000)
+fn move_amount() -> impl Strategy<Value = String> {
+    let units =
+        (1..=9_999_999_u64).prop_map(|units| format!("{}.{:04}", units / 10_000, units % 10_000));
+    prop_oneof![1 => select(&MOVE_EDGES).prop_map(str::to_owned), 3 => units]
 }
 
 /// A row of the input as a source reads it, before parsing: a missing amount is `None`, never
@@ -321,48 +324,89 @@ pub(crate) fn command(input: &InputRow) -> Option<Command> {
     }
 }
 
-/// The edges a run visits, one draw in four.
-#[derive(Debug, Clone, Copy)]
-enum Edge {
-    /// A deposit or a withdrawal reusing an earlier deposit's or withdrawal's tx id.
-    RepeatedTx,
-    /// A dispute command naming `u32::MAX`, `4_000_000_000` or a withdrawal's tx id.
-    UnknownTx,
-    /// A dispute command naming another client's deposit.
-    ForeignTx,
-    /// On a fresh client: two deposits, a dispute and a chargeback of the first, then up to three
-    /// of a deposit, a withdrawal and any dispute command on either deposit.
-    AfterChargeback,
-    /// On a fresh client: a deposit, maybe a second deposit and its dispute, then a withdrawal of
-    /// exactly the first amount, maybe followed by `0.0001` more.
-    ExactBalance,
-    /// A deposit or a withdrawal of an amount at or past an edge of the grammar.
-    BoundaryAmount,
-    /// An unreadable row, a row with too many fields, or a deposit or a withdrawal with no amount
-    /// or with an amount edge a source delivers.
-    MalformedRow,
+/// A builder of a dispute command's row.
+type DisputeRow = fn(u16, u32) -> InputRow;
+
+/// One draw of a run: an ordinary row or, one draw in four, the rows of an edge.
+#[derive(Debug)]
+enum Draw {
+    /// An ordinary row.
+    Ordinary(Ordinary),
+    /// The rows of an edge.
+    Edge(Edge),
 }
 
-/// Every edge, each as likely.
-const EDGES: [Edge; 7] = [
-    Edge::RepeatedTx,
-    Edge::UnknownTx,
-    Edge::ForeignTx,
-    Edge::AfterChargeback,
-    Edge::ExactBalance,
-    Edge::BoundaryAmount,
-    Edge::MalformedRow,
-];
+/// An ordinary row as drawn, by a client from `CLIENTS`: a deposit or a withdrawal of its amount,
+/// or a dispute command naming a recorded deposit.
+#[derive(Debug)]
+enum Ordinary {
+    /// A deposit of this amount.
+    Deposit { client: u16, amount: String },
+    /// A withdrawal of this amount.
+    Withdrawal { client: u16, amount: String },
+    /// A dispute command, built by `command`, naming the recorded deposit `target` picks.
+    Dispute { client: u16, command: DisputeRow, target: Index },
+}
+
+/// The edges a run visits, each as likely, as drawn: every choice their rows may need, made before
+/// the rows ahead of them are known.
+#[derive(Debug)]
+enum Edge {
+    /// A deposit or a withdrawal reusing an earlier deposit's or withdrawal's tx id, one draw in
+    /// two by that row's client (`None`) and otherwise by `client`, one of `EDGE_CLIENTS`;
+    /// `instead` before any.
+    RepeatedTx {
+        used: Index,
+        client: Option<u16>,
+        amount: String,
+        is_deposit: bool,
+        instead: Ordinary,
+    },
+    /// A dispute command naming `u32::MAX`, `4_000_000_000` or a withdrawal's tx id.
+    UnknownTx { target: Index, client: u16, command: DisputeRow },
+    /// A dispute command naming another client's deposit; `instead` before any deposit.
+    ForeignTx { target: Index, other: Index, command: DisputeRow, instead: Ordinary },
+    /// On a fresh client: two deposits, a dispute and a chargeback of the first, then up to three
+    /// of a deposit, a withdrawal and any dispute command on either deposit.
+    AfterChargeback { first: String, second: String, then: Vec<Later> },
+    /// On a fresh client: a deposit, maybe a second deposit and its dispute, then a withdrawal of
+    /// exactly the first amount, maybe followed by `0.0001` more.
+    ExactBalance { amount: String, disputed: Option<String>, over: bool },
+    /// A deposit or a withdrawal of an amount at or past an edge of the grammar.
+    BoundaryAmount { client: u16, amount: &'static str, is_deposit: bool },
+    /// An unreadable row, a row with too many fields, or a deposit or a withdrawal with no amount
+    /// or with an amount edge a source delivers.
+    MalformedRow(Shape),
+}
+
+/// A row after a chargeback, on its client.
+#[derive(Debug)]
+enum Later {
+    /// A deposit of this amount.
+    Deposit(String),
+    /// A withdrawal of this amount.
+    Withdrawal(String),
+    /// A dispute command on the first deposit, or else on the second.
+    Dispute { on_first: bool, command: DisputeRow },
+}
+
+/// What a malformed-row edge builds: an unreadable row, a row with too many fields, or a deposit
+/// or a withdrawal with no amount or with an amount edge a source delivers, which may parse.
+#[derive(Debug, Clone, Copy)]
+enum Shape {
+    /// A row with a field that does not read.
+    Unreadable,
+    /// A row with more fields than the header names.
+    TooManyFields,
+    /// A deposit or a withdrawal by `client`, with no amount or with `spelling`.
+    Fields { client: u16, is_deposit: bool, spelling: Option<&'static str> },
+}
 
 /// Amount edges no source delivers: it reads an empty field as absent and trims every field.
 const UNDELIVERED: [&str; 3] = ["", " 1", "1 "];
 
-/// Every kind, each as likely.
-const KINDS: [Kind; 5] =
-    [Kind::Deposit, Kind::Withdrawal, Kind::Dispute, Kind::Resolve, Kind::Chargeback];
-
 /// The builders of the three dispute commands.
-const DISPUTE_ROWS: [fn(u16, u32) -> InputRow; 3] = [dispute, resolve, chargeback];
+const DISPUTE_ROWS: [DisputeRow; 3] = [dispute, resolve, chargeback];
 
 /// The clients ordinary rows name, and the edges that need no other.
 const CLIENTS: [u16; 3] = [1, 2, 3];
@@ -378,35 +422,101 @@ const UNKNOWN_TXS: [u32; 2] = [u32::MAX, 4_000_000_000];
 const BOUNDARY_AMOUNTS: [&str; 7] =
     ["0.0001", "999999999999999.9999", "1000000000000000", "0", "0.00001", "1.50000", "0001.5"];
 
-/// Wholes of an ordinary amount: `0..100`.
-const WHOLES_BELOW_100: NonZeroU64 = NonZeroU64::MIN.saturating_add(99);
-
-/// A choice among four.
-const FOUR: NonZeroU64 = NonZeroU64::MIN.saturating_add(3);
-
-/// A choice among three.
-const THREE: NonZeroU64 = NonZeroU64::MIN.saturating_add(2);
-
 /// The most rows a run holds.
 const MAX_ROWS: usize = 16;
 
-/// Lengths a run aims for: `0..=16`.
-const ROW_COUNTS: NonZeroU64 = NonZeroU64::MIN.saturating_add(16);
-
-/// An ordinary amount's text, `whole[.digits]`: a whole below 100 and one to four digits.
-fn ordinary_amount(random: &mut Gen) -> String {
-    let whole = random.below(WHOLES_BELOW_100);
-    if random.one_in(EVEN_ODDS) {
-        return whole.to_string();
-    }
-    let digits: String =
-        (0..=random.below(FOUR)).filter_map(|_| random.pick(&DIGITS).copied()).collect();
-    format!("{whole}.{digits}")
+/// An ordinary amount's text, `whole[.digits]`: a whole below 100 and, one draw in two, a point
+/// and one to four digits.
+fn ordinary_amount() -> impl Strategy<Value = String> {
+    (0..100_u64, option::of(spelled(&DIGITS, 1..=4))).prop_map(|(whole, digits)| match digits {
+        Some(digits) => format!("{whole}.{digits}"),
+        None => whole.to_string(),
+    })
 }
 
-/// Any dispute command by `client` naming `tx`.
-fn any_dispute(random: &mut Gen, client: u16, tx: u32) -> InputRow {
-    random.pick(&DISPUTE_ROWS).map_or_else(|| dispute(client, tx), |row| row(client, tx))
+/// An ordinary row's draw: a client from `CLIENTS` and any of the five kinds, as often each.
+fn ordinary() -> impl Strategy<Value = Ordinary> {
+    prop_oneof![
+        1 => (select(&CLIENTS), ordinary_amount())
+            .prop_map(|(client, amount)| Ordinary::Deposit { client, amount }),
+        1 => (select(&CLIENTS), ordinary_amount())
+            .prop_map(|(client, amount)| Ordinary::Withdrawal { client, amount }),
+        3 => (select(&CLIENTS), select(&DISPUTE_ROWS), any::<Index>())
+            .prop_map(|(client, command, target)| Ordinary::Dispute { client, command, target }),
+    ]
+}
+
+/// An edge's draw, each edge as likely.
+fn edge() -> impl Strategy<Value = Edge> {
+    let repeated_tx = (
+        any::<Index>(),
+        option::of(select(&EDGE_CLIENTS)),
+        ordinary_amount(),
+        any::<bool>(),
+        ordinary(),
+    )
+        .prop_map(|(used, client, amount, is_deposit, instead)| Edge::RepeatedTx {
+            used,
+            client,
+            amount,
+            is_deposit,
+            instead,
+        });
+    let unknown_tx = (any::<Index>(), select(&EDGE_CLIENTS), select(&DISPUTE_ROWS))
+        .prop_map(|(target, client, command)| Edge::UnknownTx { target, client, command });
+    let foreign_tx = (any::<Index>(), any::<Index>(), select(&DISPUTE_ROWS), ordinary()).prop_map(
+        |(target, other, command, instead)| Edge::ForeignTx { target, other, command, instead },
+    );
+    let after_chargeback = (ordinary_amount(), ordinary_amount(), vec(later(), 0..=3))
+        .prop_map(|(first, second, then)| Edge::AfterChargeback { first, second, then });
+    let exact_balance = (ordinary_amount(), option::of(ordinary_amount()), any::<bool>())
+        .prop_map(|(amount, disputed, over)| Edge::ExactBalance { amount, disputed, over });
+    let boundary_amount = (select(&CLIENTS), select(&BOUNDARY_AMOUNTS), any::<bool>()).prop_map(
+        |(client, amount, is_deposit)| Edge::BoundaryAmount { client, amount, is_deposit },
+    );
+    let malformed_row = shape().prop_map(Edge::MalformedRow);
+    prop_oneof![
+        repeated_tx,
+        unknown_tx,
+        foreign_tx,
+        after_chargeback,
+        exact_balance,
+        boundary_amount,
+        malformed_row,
+    ]
+}
+
+/// A row after a chargeback: a deposit, a withdrawal or any dispute command, as often each.
+fn later() -> impl Strategy<Value = Later> {
+    prop_oneof![
+        ordinary_amount().prop_map(Later::Deposit),
+        ordinary_amount().prop_map(Later::Withdrawal),
+        (any::<bool>(), select(&DISPUTE_ROWS))
+            .prop_map(|(on_first, command)| Later::Dispute { on_first, command }),
+    ]
+}
+
+/// What a malformed-row edge builds, each of its four rows as likely: an unreadable row, a row
+/// with too many fields, and a deposit or a withdrawal by a client from `CLIENTS` with no amount
+/// or with an amount edge a source delivers.
+fn shape() -> impl Strategy<Value = Shape> {
+    let delivered: Vec<&'static str> =
+        AMOUNT_EDGES.into_iter().filter(|spelling| !UNDELIVERED.contains(spelling)).collect();
+    let fields = (select(&CLIENTS), any::<bool>(), option::of(select(delivered)))
+        .prop_map(|(client, is_deposit, spelling)| Shape::Fields { client, is_deposit, spelling });
+    prop_oneof![
+        1 => Just(Shape::Unreadable),
+        1 => Just(Shape::TooManyFields),
+        2 => fields,
+    ]
+}
+
+/// The item of `items` that `index` picks, `None` when there are none.
+fn pick<T: Copy>(index: Index, items: &[T]) -> Option<T> {
+    if items.is_empty() {
+        return None;
+    }
+    items.get(index.index(items.len())).copied()
 }
 
 /// Ids no edge names: clients from 100 and tx ids from 0, each handed out once.
@@ -439,8 +549,8 @@ struct Named {
     tx: u32,
 }
 
-/// A run being drawn: its rows, the fresh ids left, and the deposits and withdrawals it has
-/// drawn on fresh tx ids.
+/// A run being built from its draws: its rows, the fresh ids left, and the deposits and
+/// withdrawals it has built on fresh tx ids.
 #[derive(Debug)]
 struct Draft {
     rows: Vec<InputRow>,
@@ -472,170 +582,179 @@ impl Draft {
         self.withdrawals.push(Named { client, tx });
     }
 
-    /// A recorded deposit's tx id, any client's, or a fresh one before any deposit.
-    fn target(&mut self, random: &mut Gen) -> u32 {
-        match random.pick(&self.deposits) {
+    /// The tx id of the recorded deposit `target` picks, any client's, or a fresh one before any
+    /// deposit.
+    fn target(&mut self, target: Index) -> u32 {
+        match pick(target, &self.deposits) {
             Some(named) => named.tx,
             None => self.fresh.tx(),
         }
     }
 
-    /// An ordinary row: any kind, a client from `CLIENTS`, a fresh tx id for a deposit or a
-    /// withdrawal, and a recorded deposit's tx id for a dispute command.
-    fn ordinary(&mut self, random: &mut Gen) {
-        let client = random.pick(&CLIENTS).copied().unwrap_or_default();
-        match random.pick(&KINDS).copied().unwrap_or(Kind::Deposit) {
-            Kind::Deposit => {
+    /// The rows of `draw`.
+    fn draw(&mut self, draw: &Draw) {
+        match draw {
+            Draw::Ordinary(ordinary) => self.ordinary(ordinary),
+            Draw::Edge(edge) => self.edge(edge),
+        }
+    }
+
+    /// An ordinary row: a fresh tx id for a deposit or a withdrawal, and a recorded deposit's tx
+    /// id for a dispute command.
+    fn ordinary(&mut self, ordinary: &Ordinary) {
+        match ordinary {
+            Ordinary::Deposit { client, amount } => {
                 let tx = self.fresh.tx();
-                self.push_deposit(client, tx, &ordinary_amount(random));
+                self.push_deposit(*client, tx, amount);
             }
-            Kind::Withdrawal => {
+            Ordinary::Withdrawal { client, amount } => {
                 let tx = self.fresh.tx();
-                self.push_withdrawal(client, tx, &ordinary_amount(random));
+                self.push_withdrawal(*client, tx, amount);
             }
-            kind @ (Kind::Dispute | Kind::Resolve | Kind::Chargeback) => {
-                let tx = self.target(random);
-                self.rows.push(InputRow::Fields { kind, client, tx, amount: None });
+            Ordinary::Dispute { client, command, target } => {
+                let tx = self.target(*target);
+                self.rows.push(command(*client, tx));
             }
         }
     }
 
     /// The rows of `edge`.
-    fn edge(&mut self, random: &mut Gen, edge: Edge) {
+    fn edge(&mut self, edge: &Edge) {
         match edge {
-            Edge::RepeatedTx => self.repeated_tx(random),
-            Edge::UnknownTx => self.unknown_tx(random),
-            Edge::ForeignTx => self.foreign_tx(random),
-            Edge::AfterChargeback => self.after_chargeback(random),
-            Edge::ExactBalance => self.exact_balance(random),
-            Edge::BoundaryAmount => self.boundary_amount(random),
-            Edge::MalformedRow => self.malformed_row(random),
+            Edge::RepeatedTx { used, client, amount, is_deposit, instead } => {
+                self.repeated_tx(*used, *client, amount, *is_deposit, instead);
+            }
+            Edge::UnknownTx { target, client, command } => {
+                self.unknown_tx(*target, *client, *command);
+            }
+            Edge::ForeignTx { target, other, command, instead } => {
+                self.foreign_tx(*target, *other, *command, instead);
+            }
+            Edge::AfterChargeback { first, second, then } => {
+                self.after_chargeback(first, second, then);
+            }
+            Edge::ExactBalance { amount, disputed, over } => {
+                self.exact_balance(amount, disputed.as_deref(), *over);
+            }
+            Edge::BoundaryAmount { client, amount, is_deposit } => {
+                self.boundary_amount(*client, amount, *is_deposit);
+            }
+            Edge::MalformedRow(shape) => self.malformed_row(*shape),
         }
     }
 
-    /// A deposit or a withdrawal reusing an earlier one's tx id, one draw in two by that row's
-    /// client and otherwise by one of `EDGE_CLIENTS`; an ordinary row before any.
-    fn repeated_tx(&mut self, random: &mut Gen) {
-        let used: Vec<Named> = self.deposits.iter().chain(&self.withdrawals).copied().collect();
-        let Some(&Named { client: owner, tx }) = random.pick(&used) else {
-            self.ordinary(random);
+    /// A deposit or a withdrawal reusing the tx id `used` picks among the earlier deposits' and
+    /// withdrawals', by `client`, or by that row's client when `client` is `None`; the row
+    /// `instead` before any.
+    fn repeated_tx(
+        &mut self,
+        used: Index,
+        client: Option<u16>,
+        amount: &str,
+        is_deposit: bool,
+        instead: &Ordinary,
+    ) {
+        let earlier: Vec<Named> = self.deposits.iter().chain(&self.withdrawals).copied().collect();
+        let Some(Named { client: owner, tx }) = pick(used, &earlier) else {
+            self.ordinary(instead);
             return;
         };
-        let client = if random.one_in(EVEN_ODDS) {
-            owner
-        } else {
-            random.pick(&EDGE_CLIENTS).copied().unwrap_or_default()
-        };
-        let amount = ordinary_amount(random);
-        let row = if random.one_in(EVEN_ODDS) {
-            deposit(client, tx, &amount)
-        } else {
-            withdrawal(client, tx, &amount)
-        };
+        let client = client.unwrap_or(owner);
+        let row =
+            if is_deposit { deposit(client, tx, amount) } else { withdrawal(client, tx, amount) };
         self.rows.push(row);
     }
 
-    /// A dispute command naming a tx id no deposit holds.
-    fn unknown_tx(&mut self, random: &mut Gen) {
+    /// A dispute command by `client` naming the tx id `target` picks among those no deposit holds.
+    fn unknown_tx(&mut self, target: Index, client: u16, command: DisputeRow) {
         let targets: Vec<u32> =
             UNKNOWN_TXS.into_iter().chain(self.withdrawals.iter().map(|named| named.tx)).collect();
-        let tx = random.pick(&targets).copied().unwrap_or(u32::MAX);
-        let client = random.pick(&EDGE_CLIENTS).copied().unwrap_or_default();
-        let row = any_dispute(random, client, tx);
-        self.rows.push(row);
+        let tx = pick(target, &targets).unwrap_or(u32::MAX);
+        self.rows.push(command(client, tx));
     }
 
-    /// A dispute command naming another client's deposit; an ordinary row before any deposit.
-    fn foreign_tx(&mut self, random: &mut Gen) {
-        let Some(&Named { client: owner, tx }) = random.pick(&self.deposits) else {
-            self.ordinary(random);
+    /// A dispute command naming the deposit `target` picks, by the client `other` picks among the
+    /// rest of `CLIENTS`; the row `instead` before any deposit.
+    fn foreign_tx(&mut self, target: Index, other: Index, command: DisputeRow, instead: &Ordinary) {
+        let Some(Named { client: owner, tx }) = pick(target, &self.deposits) else {
+            self.ordinary(instead);
             return;
         };
         let others: Vec<u16> = CLIENTS.into_iter().filter(|&client| client != owner).collect();
-        let client = random.pick(&others).copied().unwrap_or_default();
-        let row = any_dispute(random, client, tx);
-        self.rows.push(row);
+        let client = pick(other, &others).unwrap_or_default();
+        self.rows.push(command(client, tx));
     }
 
-    /// On a fresh client, two deposits, the first disputed and charged back, then up to three
-    /// more rows.
-    fn after_chargeback(&mut self, random: &mut Gen) {
+    /// On a fresh client, deposits of `first` and `second`, the first disputed and charged back,
+    /// then the rows `then` names.
+    fn after_chargeback(&mut self, first: &str, second: &str, then: &[Later]) {
         let client = self.fresh.client();
-        let first = self.fresh.tx();
-        let second = self.fresh.tx();
-        self.push_deposit(client, first, &ordinary_amount(random));
-        self.push_deposit(client, second, &ordinary_amount(random));
-        self.rows.push(dispute(client, first));
-        self.rows.push(chargeback(client, first));
-        for _ in 0..random.below(FOUR) {
-            match random.below(THREE) {
-                0 => {
+        let first_tx = self.fresh.tx();
+        let second_tx = self.fresh.tx();
+        self.push_deposit(client, first_tx, first);
+        self.push_deposit(client, second_tx, second);
+        self.rows.push(dispute(client, first_tx));
+        self.rows.push(chargeback(client, first_tx));
+        for later in then {
+            match later {
+                Later::Deposit(amount) => {
                     let tx = self.fresh.tx();
-                    self.push_deposit(client, tx, &ordinary_amount(random));
+                    self.push_deposit(client, tx, amount);
                 }
-                1 => {
+                Later::Withdrawal(amount) => {
                     let tx = self.fresh.tx();
-                    self.push_withdrawal(client, tx, &ordinary_amount(random));
+                    self.push_withdrawal(client, tx, amount);
                 }
-                _ => {
-                    let tx = if random.one_in(EVEN_ODDS) { first } else { second };
-                    let row = any_dispute(random, client, tx);
-                    self.rows.push(row);
+                Later::Dispute { on_first, command } => {
+                    let tx = if *on_first { first_tx } else { second_tx };
+                    self.rows.push(command(client, tx));
                 }
             }
         }
     }
 
-    /// On a fresh client, a deposit, maybe a second one disputed, then a withdrawal of exactly the
-    /// first amount, maybe followed by `0.0001` more.
-    fn exact_balance(&mut self, random: &mut Gen) {
+    /// On a fresh client, a deposit of `amount`, then a second deposit of `disputed` and its
+    /// dispute when there is one, then a withdrawal of exactly `amount`, followed by `0.0001` more
+    /// when `over`.
+    fn exact_balance(&mut self, amount: &str, disputed: Option<&str>, over: bool) {
         let client = self.fresh.client();
-        let amount = ordinary_amount(random);
         let deposit_tx = self.fresh.tx();
-        self.push_deposit(client, deposit_tx, &amount);
-        if random.one_in(EVEN_ODDS) {
+        self.push_deposit(client, deposit_tx, amount);
+        if let Some(disputed) = disputed {
             let disputed_tx = self.fresh.tx();
-            self.push_deposit(client, disputed_tx, &ordinary_amount(random));
+            self.push_deposit(client, disputed_tx, disputed);
             self.rows.push(dispute(client, disputed_tx));
         }
         let withdrawal_tx = self.fresh.tx();
-        self.push_withdrawal(client, withdrawal_tx, &amount);
-        if random.one_in(EVEN_ODDS) {
+        self.push_withdrawal(client, withdrawal_tx, amount);
+        if over {
             let extra_tx = self.fresh.tx();
             self.push_withdrawal(client, extra_tx, "0.0001");
         }
     }
 
-    /// A deposit or a withdrawal of a boundary amount, on a fresh tx id.
-    fn boundary_amount(&mut self, random: &mut Gen) {
-        let client = random.pick(&CLIENTS).copied().unwrap_or_default();
-        let amount = random.pick(&BOUNDARY_AMOUNTS).copied().unwrap_or_default();
+    /// A deposit or a withdrawal of `amount` by `client`, on a fresh tx id.
+    fn boundary_amount(&mut self, client: u16, amount: &str, is_deposit: bool) {
         let tx = self.fresh.tx();
-        if random.one_in(EVEN_ODDS) {
+        if is_deposit {
             self.push_deposit(client, tx, amount);
         } else {
             self.push_withdrawal(client, tx, amount);
         }
     }
 
-    /// A malformed row: unreadable, with too many fields, or a deposit or a withdrawal on a fresh
-    /// tx id with no amount or with an amount edge a source delivers.
-    fn malformed_row(&mut self, random: &mut Gen) {
-        let client = random.pick(&CLIENTS).copied().unwrap_or_default();
-        let kind = if random.one_in(EVEN_ODDS) { Kind::Deposit } else { Kind::Withdrawal };
-        let delivered: Vec<&str> =
-            AMOUNT_EDGES.into_iter().filter(|spelling| !UNDELIVERED.contains(spelling)).collect();
-        let row = match random.below(FOUR) {
-            0 => InputRow::Unreadable,
-            1 => InputRow::TooManyFields,
-            2 => InputRow::Fields { kind, client, tx: self.fresh.tx(), amount: None },
-            _ => {
-                let spelling = random.pick(&delivered).copied().unwrap_or_default();
+    /// The row `shape` names; a deposit or a withdrawal takes a fresh tx id.
+    fn malformed_row(&mut self, shape: Shape) {
+        let row = match shape {
+            Shape::Unreadable => InputRow::Unreadable,
+            Shape::TooManyFields => InputRow::TooManyFields,
+            Shape::Fields { client, is_deposit, spelling } => {
+                let kind = if is_deposit { Kind::Deposit } else { Kind::Withdrawal };
                 InputRow::Fields {
                     kind,
                     client,
                     tx: self.fresh.tx(),
-                    amount: Some(spelling.to_owned()),
+                    amount: spelling.map(str::to_owned),
                 }
             }
         };
@@ -671,8 +790,10 @@ pub(crate) fn unique(rows: &[InputRow]) -> Unique {
     )
 }
 
-/// The rows of `unique`, each client's in their order, the clients taking turns at random.
-pub(crate) fn interleave(random: &mut Gen, unique: &Unique) -> Unique {
+/// The rows of `unique`, each client's in their order, the clients taking turns: each of `turns`
+/// picks the next among the clients still waiting, and once the turns run out the first waiting
+/// goes.
+pub(crate) fn interleave(unique: &Unique, turns: &[Index]) -> Unique {
     let mut queues: BTreeMap<ClientId, VecDeque<InputRow>> = BTreeMap::new();
     for input in unique.rows() {
         if let Some(client) = client_of(input) {
@@ -680,10 +801,19 @@ pub(crate) fn interleave(random: &mut Gen, unique: &Unique) -> Unique {
         }
     }
     let mut merged = Vec::new();
-    while let Some(client) = random.pick(&waiting(&queues)).copied() {
-        if let Some(input) = queues.get_mut(&client).and_then(VecDeque::pop_front) {
-            merged.push(input);
-        }
+    let mut turns = turns.iter().copied();
+    loop {
+        let waiting = waiting(&queues);
+        let next = match turns.next() {
+            Some(turn) => pick(turn, &waiting),
+            None => waiting.first().copied(),
+        };
+        let Some(input) =
+            next.and_then(|client| queues.get_mut(&client)).and_then(VecDeque::pop_front)
+        else {
+            break;
+        };
+        merged.push(input);
     }
     Unique(merged)
 }
@@ -702,48 +832,57 @@ fn client_of(input: &InputRow) -> Option<ClientId> {
     }
 }
 
-/// Up to sixteen input rows: ordinary draws and, one draw in four, an edge's rows.
-pub(crate) fn rows(random: &mut Gen) -> Vec<InputRow> {
-    let count = usize::try_from(random.below(ROW_COUNTS)).unwrap_or_default();
-    let mut draft = Draft::new();
-    while draft.rows.len() < count {
-        if random.one_in(EDGE_ODDS) {
-            let edge = random.pick(&EDGES).copied().unwrap_or(Edge::RepeatedTx);
-            draft.edge(random, edge);
-        } else {
-            draft.ordinary(random);
+/// Up to sixteen input rows: ordinary draws and, one draw in four, an edge's rows, until the run
+/// holds as many rows as it has draws.
+pub(crate) fn rows() -> impl Strategy<Value = Vec<InputRow>> {
+    let any_draw = prop_oneof![
+        3 => ordinary().prop_map(Draw::Ordinary),
+        1 => edge().prop_map(Draw::Edge),
+    ];
+    vec(any_draw, 0..=MAX_ROWS).prop_map(|draws| {
+        let mut draft = Draft::new();
+        for draw in &draws {
+            if draft.rows.len() >= draws.len() {
+                break;
+            }
+            draft.draw(draw);
         }
-    }
-    draft.rows.truncate(MAX_ROWS);
-    draft.rows
+        draft.rows.truncate(MAX_ROWS);
+        draft.rows
+    })
 }
 
 /// The rows of a run that read as commands: what the core receives.
-pub(crate) fn commands(random: &mut Gen) -> Vec<Command> {
-    rows(random).iter().filter_map(command).collect()
+pub(crate) fn commands() -> impl Strategy<Value = Vec<Command>> {
+    rows().prop_map(|rows| rows.iter().filter_map(command).collect())
 }
 
-/// Lengths of a sequence of events: `0..=12`.
-const EVENT_COUNTS: NonZeroU64 = NonZeroU64::MIN.saturating_add(12);
+/// Turns for `interleave`: one for each row a run may hold.
+pub(crate) fn turns() -> impl Strategy<Value = Vec<Index>> {
+    vec(any::<Index>(), MAX_ROWS)
+}
+
+/// The most events a sequence holds.
+pub(crate) const MAX_EVENTS: usize = 12;
 
 /// Up to twelve events of every kind, each amount parsed from a valid amount's text.
-pub(crate) fn events(random: &mut Gen) -> Vec<Event> {
-    let count = random.below(EVENT_COUNTS);
-    (0..count).filter_map(|_| event(random)).collect()
+pub(crate) fn events() -> impl Strategy<Value = Vec<Event>> {
+    vec(event(), 0..=MAX_EVENTS).prop_map(|events| events.into_iter().flatten().collect())
 }
 
-/// One event of any kind, its amount parsed from a valid amount's text.
-fn event(random: &mut Gen) -> Option<Event> {
-    let amount = move_amount(random).parse::<Amount>().ok()?;
-    let events = [
-        Event::Opened,
-        Event::Client(ClientEvent::Deposited(amount)),
-        Event::Client(ClientEvent::Withdrawn(amount)),
-        Event::Dispute(DisputeEvent::Held(amount)),
-        Event::Dispute(DisputeEvent::Released(amount)),
-        Event::Dispute(DisputeEvent::ChargedBack(amount)),
+/// One event of any kind, its amount parsed from a valid amount's text; `None` only if that text
+/// does not parse.
+pub(crate) fn event() -> impl Strategy<Value = Option<Event>> {
+    let kinds: [fn(Amount) -> Event; 6] = [
+        |_| Event::Opened,
+        |amount| Event::Client(ClientEvent::Deposited(amount)),
+        |amount| Event::Client(ClientEvent::Withdrawn(amount)),
+        |amount| Event::Dispute(DisputeEvent::Held(amount)),
+        |amount| Event::Dispute(DisputeEvent::Released(amount)),
+        |amount| Event::Dispute(DisputeEvent::ChargedBack(amount)),
     ];
-    random.pick(&events).copied()
+    (move_amount(), select(kinds.to_vec()))
+        .prop_map(|(text, kind)| text.parse::<Amount>().ok().map(kind))
 }
 
 /// Clients an address draws from: few, so addresses recur, with both extremes.
@@ -754,8 +893,7 @@ const ADDRESS_TXS: [u32; 5] = [1, 2, 3, 0, u32::MAX];
 
 /// One address: a client from `ADDRESS_CLIENTS` and a tx id from `ADDRESS_TXS`, so addresses
 /// recur.
-pub(crate) fn address(random: &mut Gen) -> Address {
-    let client = random.pick(&ADDRESS_CLIENTS).copied().unwrap_or_default();
-    let tx = random.pick(&ADDRESS_TXS).copied().unwrap_or_default();
-    Address::new(ClientId::from(client), TxId::from(tx))
+pub(crate) fn address() -> impl Strategy<Value = Address> {
+    (select(&ADDRESS_CLIENTS), select(&ADDRESS_TXS))
+        .prop_map(|(client, tx)| Address::new(ClientId::from(client), TxId::from(tx)))
 }

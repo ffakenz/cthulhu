@@ -14,8 +14,7 @@ const TOO_LARGE: u64 = 1_000_000_000_000_000;
 fn prop_amount_text_parses_back_to_its_value() {
     let law = support::for_all(
         "an amount's four-decimal text parses back to it; zero and 10^15 up are refused",
-        500,
-        generate::amount_value,
+        generate::amount_value(),
         |&AmountValue { whole, fraction }| {
             let text = format!("{whole}.{fraction:04}");
             let refusal = if whole >= TOO_LARGE {
@@ -44,8 +43,7 @@ fn prop_amount_text_parses_back_to_its_value() {
 fn prop_amount_spelling_parses_exactly_when_the_grammar_admits_it() {
     let law = support::for_all(
         "a spelling parses exactly when the grammar admits it, and prints as its four-decimal value",
-        500,
-        generate::amount_spelling,
+        generate::amount_spelling(),
         |text| {
             text.parse::<Amount>().map(|amount| amount.to_string())
                 == model::amount_units(text).map(|units| Units::from(units).to_string())
@@ -60,8 +58,7 @@ fn prop_amount_spelling_parses_exactly_when_the_grammar_admits_it() {
 fn prop_amount_parsing_never_panics() {
     let law = support::for_all(
         "parsing any text answers, the same each time, and never panics",
-        500,
-        generate::any_text,
+        generate::any_text(),
         |text| text.parse::<Amount>() == text.parse::<Amount>(),
     );
     if let Err(failure) = law {
@@ -73,8 +70,7 @@ fn prop_amount_parsing_never_panics() {
 fn prop_balance_never_prints_negative_zero() {
     let law = support::for_all(
         "a balance prints its exact value with four decimals, and zero as 0.0000, never -0.0000",
-        500,
-        generate::balance_moves,
+        generate::balance_moves(),
         |moves| {
             moves
                 .iter()

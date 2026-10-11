@@ -13,7 +13,7 @@ use backend::domain::{
 };
 
 use crate::support::model::{self, Units};
-use crate::support::{self, Failure, Gen, generate};
+use crate::support::{self, Failure, generate};
 
 /// One command as the runtime took it.
 #[derive(Debug, Clone, Copy)]
@@ -219,7 +219,7 @@ fn holds(commands: &[Command], law: impl Fn(&World, &Step) -> bool) -> bool {
 
 /// A law over every step of generated runs.
 fn driver_law(label: &'static str, law: impl Fn(&World, &Step) -> bool) -> Result<(), Failure> {
-    support::for_all(label, 500, generate::commands, |commands| holds(commands, &law))
+    support::for_all(label, generate::commands(), |commands| holds(commands, &law))
 }
 
 /// The dispute lifecycle: from a deposit's status, the status a dispute command leaves, `None`
@@ -304,8 +304,7 @@ fn prop_decide_never_changes_state() {
 fn prop_evolve_is_total() {
     let law = support::for_all(
         "evolve applies any event to any footprint, or to none, and never fails below the amount cap",
-        500,
-        |random: &mut Gen| (generate::commands(random), generate::events(random)),
+        (generate::commands(), generate::events()),
         |(commands, events)| {
             holds(commands, |_, step| {
                 [None, Some(step.start.footprint()), Some(step.after())]

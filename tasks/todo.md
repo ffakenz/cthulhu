@@ -1,635 +1,361 @@
-# Stage 1 library core — implementation plan
+# Property laws on proptest — implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans, inline, as the person
-> chose at hand-off on 2026-10-10, to implement this plan task by task. Work in this checkout on
-> `feat/stage-1-core`, not a new worktree: the plan and its tickets stay untracked until the
-> domain commit, so a fresh worktree would not have them. Steps use checkbox (`- [ ]`) syntax for
-> tracking.
+> **For agentic workers:** superpowers:executing-plans, inline, in this checkout on
+> `feat/stage-1-core`. Steps use checkbox (`- [ ]`) syntax; `- [x]` means the command beside it
+> ran and its output supported the claim.
 
-**Goal:** the library core of stage 1 (domain, core, run, memory), each held to its laws, in four
-commits on `feat/stage-1-core`, on top of the records commit amended with the domain-model
-records and the skills that apply them.
+**Goal:** the library's 25 property laws run on `proptest`: the same laws over the same
+populations, with counterexamples shrunk and failures persisted, the hand-written generator and
+runner gone, and the dependency gate admitting proptest for tests only. One new commit on top of
+the branch, folded into nothing, after the record that admits the crate.
 
-**Architecture:** a pure decider (`decide_client`, `decide_dispute`, `evolve`) over domain types
-that cannot hold a bad value; a sequential runtime that takes each row through intake, load,
-open, decide, evolve and commit over two store ports; in-memory stores that keep the store laws.
-`main.rs`, the CSV adapters, `csv` and `serde`, binary fixtures and benchmarks are out of scope.
+**Approach:** each generator becomes a strategy in `backend/tests/it/support/generate.rs`. A
+generator whose draws depend on earlier ones draws its choices first and then interprets them, so
+every shrunk input is still one the generator could produce. `support::for_all` stays, as a thin
+runner over `proptest::test_runner::TestRunner`, so each law keeps its label and its body.
 
-**Tech stack:** Rust 1.88.0, edition 2024; the standard library and `rust_decimal`
-(`default-features = false`, `std`). Tests: one black-box crate, `backend/tests/it`, on the
-std-only seeded harness of `.claude/skills/rust-properties/references/harness.md`.
+**Tech stack:** Rust 1.88.0, edition 2024; `proptest` 1.12 (`default-features = false`, `std`) as
+a dev-dependency of `backend`.
 
-**Spec:** the accepted records in `docs/adr/` and `docs/design/`; `docs/overview.md` (behaviour,
-worked example, laws), `docs/architecture.md` (pipeline, modules), `docs/patterns.md` (decider);
-`CLAUDE.md` and the skills in `.claude/skills/`. Where code and records disagree, the records win;
-a record that proves wrong stops the work for a superseding record, never an edit.
+**Spec:** *Correctness defined by laws and a model* (laws over generated raw input weighted to
+edges; each law shown failing once; a failing law prints its seed and replays exactly); *csv,
+serde and rust_decimal as dependencies*, which this work supersedes; `CLAUDE.md` § Dependencies
+and § Tests; the `rust-properties`, `review-and-planning` and `architecture-decisions` skills.
+
+## Decisions for sign-off
+
+Approving this plan signs off the first two decisions, and the record lands `Accepted`.
+
+1. **Admit proptest 1.12.0 for tests only**, `default-features = false, features = ["std"]`.
+   - Why: a failing law shrinks to a small counterexample instead of the first random one, and the
+     failure persists and replays; strategies replace the draw-by-draw plumbing; the runner and
+     seed handling of `support.rs` stop being ours to maintain.
+   - Cost: 14 crates in the test build graph and none in the program's: `proptest`, `bitflags`,
+     `cfg-if`, `chacha20`, `core_detect`, `cpufeatures`, `getrandom`, `libc`, `r-efi`, `rand`,
+     `rand_core`, `rand_xorshift`, `regex-syntax`, `unarray`. It also builds on `num-traits` and
+     `autocfg`, already admitted. Build scripts: `getrandom` and `libc`; no procedural macro.
+     Slower clean test builds.
+   - Age: 1.12.0 was published on 2026-10-10, the day before this plan. Since 1.11.0 it moves to
+     `rand` 0.10, raises its minimum Rust to 1.88 (the pinned toolchain) and fixes bugs; none of
+     its added lines touches `unsafe`, files, processes, the network or the environment.
+   - Alternatives: keep the harness written here (no shrinking, ours to maintain); quickcheck
+     (shrinks per type through `Arbitrary`, so generators that read earlier draws need
+     hand-written shrinkers); proptest with default features (forking and timeouts, about 28
+     crates); `proptest-state-machine` (requires forking and timeouts, and the laws' drivers are
+     already folds); proptest 1.11.0 (seven months old; 17 crates, including `zerocopy-derive`, a
+     procedural macro, and two WebAssembly-only crates; moving to 1.12 later changes the set, and
+     so needs a second record).
+2. **A record superseding *csv, serde and rust_decimal as dependencies***, titled *csv, serde,
+   rust_decimal and proptest as dependencies*. It restates the program's 16 crates unchanged,
+   admits the 14 above for tests only, has `make deps` keep them out of the program's graph, and
+   lists the alternatives above as rejected. The superseded record changes its Status line only.
+   It is committed alone, before the work, as the `architecture-decisions` skill requires.
+3. **`support::for_all` stays, as a thin runner over `TestRunner`**, instead of `proptest!`
+   blocks. The call shape is unchanged, so each law's body is untouched and only its generator
+   argument changes. rustfmt keeps formatting every law, which it skips inside `proptest!`. The
+   label stays the law's name in every failure, with no `prop_assert!` format-string trap. The
+   runner sets the caller's file (`#[track_caller]`) so failures persist, and applies the
+   `PROPTEST_*` overrides as the macro does (`contextualize_config`).
+4. **Failures persist, as proptest's default**: to
+   `backend/tests/proptest-regressions/<module>.txt`, replayed first on the next run. A
+   regression file is committed with the fix of the failure it records, and never otherwise; no
+   seed is pinned in code, configuration or CI. Deliberate breaks run with
+   `PROPTEST_DISABLE_FAILURE_PERSISTENCE=1`.
+5. **500 cases per law**, as today: a `CASES` constant; `PROPTEST_CASES` overrides it for a deeper
+   run.
+6. **Strategies keep today's populations**: raw spelling, then the production parser; the same
+   edge tables and weights (`prop_oneof![3 => ordinary, 1 => edge]` is one draw in four); choices
+   then interpretation for `balance_moves`, `rows`, `interleave` and the store operations, with an
+   `Index` for every pick among what earlier draws produced; no `prop_filter`, no `prop_assume!`.
+7. **`make deps` runs two checks**: the whole graph against members, `ADMITTED` and
+   `ADMITTED_DEV`; the graph without dev-dependencies (`--edges no-dev`) against members and
+   `ADMITTED` alone.
+8. **Commits**: the record alone; then this work as one new commit; then, when the session closes,
+   its prompt history alone.
 
 ## Global constraints
 
-- Branch `feat/stage-1-core`. Never push, merge or touch a remote unless the person asks.
-- History, as the person decided on 2026-10-10: the domain-model records, the `domain-modeling`
-  and `curry-howard` skills, the harness's `Seed` and their syncs amend the records commit at the
-  branch's base (`docs(engine): …`), whose message stands; then one commit per ticket (domain,
-  core, run, memory); then each session's prompt history alone, the planning session's and then
-  the build session's. This sets aside the `architecture-decisions` skill's "commit the record and
-  its index line, and nothing else" for these two records. Until a pull request opens, a later fix
-  belongs in the commit it fixes: between tickets, never mid-ticket, it is a
-  `git commit --fixup=<sha>` on top, and Closing squashes every fixup into its commit. Once a pull
-  request is open, `CLAUDE.md` § PR reviews holds and each resolution is its own commit. Format:
-  `action(scope): description`, a blank line, `> impact`; no trailer lines.
-- TDD drives every piece. By the person's decision for this work, a ticket's red and green land
-  in its one commit, which sets aside `CLAUDE.md` § Implementation's separate red and green
-  commits.
-- The records commit is already on `origin/main`. Once amended, the branch no longer descends
-  from `main`, and landing it means replacing that commit there: a force-push, which
-  `.claude/settings.json` denies, so it is the person's to do. Amending re-signs the commit with
-  the person's key.
-- Commit as the `ffakenz` identity: `origin` is `git@github-ffakenz:ffakenz/cthulhu.git`, and
-  `git config --show-origin user.email` resolves from `~/.gitconfig-ffakenz`. Write the message to
-  a scratch file and `git commit -F` it; stage explicit paths, never `git add -A`.
-- `make ci` is green before every commit. The code-reviewer agent reviews every commit's staged
-  diff first, and every blocker and should-fix is acted on.
-- Dependencies: only `rust_decimal = { version = "1", default-features = false, features =
-  ["std"] }`, added by hand to `backend/Cargo.toml` `[dependencies]` in the domain commit. No
-  `cargo add`, no other crate, no dev-dependency.
-- `rust_decimal` is named only in `backend/src/domain/money.rs`, inside `Amount` and `Balance`.
-- `backend/src/main.rs` stays `fn main() {}`.
-- No test-only code in production. Generators, the naive model and the store doubles live in
-  `backend/tests/it`; every helper there is used, or `dead_code` fails `make lint`.
-- Every law is shown failing once against a deliberately broken implementation; its failure line
-  goes in its ticket's Law evidence table. A break is applied and undone by hand on uncommitted
-  work: never `git checkout`, `git stash` or `git reset` mid-ticket. Stage the ticket's files
-  before the first break, so a break in a new file shows in `git diff`; after each undo,
-  `git diff --quiet` exits 0. Undo by editing, never by copying a saved file back: the copy keeps
-  its old modification time, and cargo reuses the broken build.
-- A Phase 0 check that fails stops the work: ask the person before going on.
+- Branch `feat/stage-1-core`. Never push, merge or touch a remote; landing is the person's, a
+  fast-forward of `main`.
+- Commit format: `action(scope): description`, a blank line, `> impact`, no trailer lines. The
+  message is written to a scratch file outside the repository and committed with
+  `git commit -F`; stage explicit paths, never `git add -A`.
+- No dependency but proptest, added by hand to `backend/Cargo.toml`, never by `cargo add`.
+  `Cargo.lock` gains proptest's packages and changes no existing pin.
+- Nothing under `backend/src` changes. No test-only code in production; every helper in
+  `backend/tests/it` is used, or `dead_code` fails `make lint`.
+- Comments say what the code is and does: never a record number, a plan, a ticket or a
+  trade-off.
 - Never name the organisation behind the external brief or the project the decision log's style
   comes from, and never quote, restate or paraphrase the brief, in any tracked file or commit
-  message. Before each commit, grep the tree and the staged diff with the forbidden-name pattern:
-  `git grep -n -i -E --untracked -f <pattern file>` and
-  `git diff --cached | grep -n -i -E -f <pattern file>`, both silent. The pattern file is never
-  tracked: each session writes it to its scratchpad from the names its kickoff prompt points to.
-- Comments follow `CLAUDE.md` § Comments: what the code is and does; never a record number, a
-  plan, a ticket or a trade-off.
-
-## Review focus
-
-Inputs the records imply that most likely bite once the library meets real rows, and the law in
-the owning ticket that pins each:
-
-1. Amount text outside the grammar — a sign, an exponent, `_`, a bare or trailing point,
-   surrounding spaces, a non-ASCII digit — is refused as malformed, never rounded and never a
-   panic; inside it, forty leading zeros or thirty trailing zeros parse exactly. Pinned by the
-   domain ticket's reverse round trip and totality laws, whose edges list each spelling.
-2. Boundary ids — tx `0` and `u32::MAX`, client `0` and `u16::MAX` — behave as any other id.
-   `Fresh` hands out tx `0` first, so ordinary deposits and withdrawals use it; tx `u32::MAX` is
-   an unknown dispute target; clients `0` and `u16::MAX` send the repeated and unknown commands,
-   which still open their accounts. Every core and run law meets them through the command
-   generator, and the store laws address tx `0` and `u32::MAX`, and clients `0` and `u16::MAX`,
-   directly.
-3. A dispute command naming a withdrawal's tx or another client's deposit is `UnknownDeposit`
-   and only opens the account. Pinned by the core lifecycle law and the run model law, through
-   the unknown and foreign tx-id edges.
-4. A dispute after a resolve, and dispute commands on a locked account, apply; deposits and
-   withdrawals on it do not. Pinned by the core lifecycle law, which asks every dispute step,
-   locked account or not, and to which a resolved deposit is settled again; and by the
-   client-commands law, through the after-chargeback episode and the repeats a locked account's
-   own client sends.
-5. Many malformed rows leave every account as it was and the report one count per kind. Pinned by
-   the run malformed-row and bounded-report laws, through the malformed-row edge.
-
-## Domain model
-
-Stage 1's instance of *A domain model in the records' language* and *Entities identified by
-their keys*, classified as the `domain-modeling` skill does:
-
-| Kind | Stage 1 |
-|---|---|
-| Value | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Lock`, `Status`, `Sight`, `Reason` with `ClientReason` and `DisputeReason`; `Footprint`, entity states without their keys |
-| Entity | an account, `Account`, under its `ClientId`; a deposit in history, `Deposit`, under its `Address` |
-| Aggregate | a client's ledger, no domain type; the core sees it one `Footprint` at a time, at its command's `Address` |
-| Message | `Command` (`ClientCommand`, `DisputeCommand`) and `Event` (`Opened`, `ClientEvent`, `DisputeEvent`) |
-| View | `Accounts` and `Report` |
-| Boundary type | none yet: the CSV row and the printed account arrive with the CSV adapters |
-
-Rows, as `docs/overview.md` § Input describes them, become commands at the boundary:
-
-| Row field | Domain | What the type rules out |
-|---|---|---|
-| `type` | the variant: `ClientCommand::{Deposit, Withdrawal}` or `DisputeCommand::{Dispute, Resolve, Chargeback}` | an unknown kind, which is a malformed row instead |
-| `client`, `tx` | one `Address` of a `ClientId` and a `TxId` | one id passed where the other belongs; a client and a tx id taken from two commands |
-| `amount` | `Amount`, on client commands only | zero, negative, five decimals, `10^15` or more; a client command without an amount, a dispute command with one |
-
-Printed accounts, as `docs/overview.md` § Output describes them, are rendered from `Accounts`:
-
-| Printed column | Domain | What the type rules out |
-|---|---|---|
-| `client` | the key: `Accounts::by_client` yields `(ClientId, Account)` | an account stored under one client and naming another |
-| `available`, `held` | `Account::available` and `Account::held`, as `Balance` | `-0.0000`, or more than four decimals |
-| `total` | `Account::total`, derived | a total that disagrees with available plus held |
-| `locked` | `Account::is_locked`, reading a `Lock` that only `evolve` sets, on `ChargedBack` | an account locked or unlocked anywhere else |
-
-- Identity is a key throughout: accounts under `ClientId`, deposits under their `Address`, a
-  footprint at its command's `Address`. No value carries its own key, and no event carries one.
-- Each decision is exact: `decide_client` answers a `ClientEvent` or a `ClientReason`,
-  `decide_dispute` a `DisputeEvent` or a `DisputeReason`, as the overview's Commands table splits
-  them. The runtime widens both into `Event` and `Reason`, the one place the two families meet.
-- Opening is total: `open()` is the footprint `Opened` makes, so no runtime path handles an
-  overflow that opening cannot cause.
-- The aggregate's invariants are the overview's laws 1 to 3, held by the core ticket's laws.
-- Each type the tickets add, test types included, answers the `domain-modeling` and
-  `curry-howard` review questions before its commit.
+  message. Before each commit, the two greps with the pattern file the session keeps in its
+  scratchpad, never in the repository: `git grep -n -i -E --untracked -f <pattern file>` and
+  `git diff --cached | grep -n -i -E -f <pattern file>`, both silent.
+- A record is named by its title outside the decision logs, this plan included.
+- Every law is shown failing once on proptest, against the same deliberate break as in stage 1
+  (each stage 1 ticket's Law evidence table). A break is applied and undone by editing, with the
+  work staged first, so `git diff --quiet` proves each undo.
 
 ## File map
 
-| File | Ticket | Holds |
+| Path | Change |
+|---|---|
+| `docs/adr/` | the new record, its index line, the superseded record's Status line (record commit) |
+| `backend/Cargo.toml`, `Cargo.lock` | `[dev-dependencies] proptest`; the lock entries it adds |
+| `Makefile` | `ADMITTED_DEV`; the no-dev check; the `deps` help line |
+| `backend/tests/it/support.rs` | `CASES`, `Failure`, `for_all` over `TestRunner`; `Gen`, `Seed`, `EDGE_ODDS` and `seed` removed; `infallible` kept |
+| `backend/tests/it/support/generate.rs` | every generator a strategy (Strategy map); tables, `InputRow`, the builders, `row`, `command`, `unique`, `moved`, `zeroing` and `unpadded` unchanged |
+| `backend/tests/it/{domain,core,run,memory}.rs` | each `for_all` call takes a strategy; `broken_source`, `reordering`, `operations` and the sightings become strategies |
+| `backend/tests/it/support/model.rs` | unchanged |
+| `.claude/skills/rust-properties/` | `SKILL.md` on proptest; `references/harness.md` replaced by `references/proptest.md` |
+| `.claude/skills/rust-effects/SKILL.md` | the sentence on the harness's clock, environment and `catch_unwind` removed |
+| `.claude/skills/functional-architecture/SKILL.md` | its pointer to `rust-properties` names strategies and their runner |
+| `.claude/skills/review-and-planning/SKILL.md` | the test-only dependency check in the present tense; the harness lesson's rules |
+| `CLAUDE.md`, `README.md` | the test-only crates and the no-dev check; `CLAUDE.md` § Tests describes the support tree |
+| `tasks/todo.md`, `tasks/lessons.md` | this plan and its Review; the harness lesson's graduation line |
+
+## Strategy map
+
+| Generator | Today, on `&mut Gen` | Strategy |
 |---|---|---|
-| `backend/Cargo.toml`, `Cargo.lock` | domain | the `rust_decimal` dependency |
-| `Makefile` | domain | `make deps`: the build graph against the admitted crates |
-| `backend/src/lib.rs` | each | one `pub mod` line per module |
-| `backend/src/domain.rs` | domain | module doc, private submodules, `pub use` of every type |
-| `backend/src/domain/id.rs` | domain | `ClientId`, `TxId`, `Address` |
-| `backend/src/domain/money.rs` | domain | `Amount`, `AmountError`, `Balance`: the only `rust_decimal` user |
-| `backend/src/domain/ledger.rs` | domain, core | `Account`, `Lock`, `Deposit`, `Status`, `Footprint`; `Account::new`, `Account::lock` and `Deposit::new` in core |
-| `backend/src/domain/command.rs` | domain | `ClientCommand`, `DisputeCommand`, `Command` |
-| `backend/src/domain/event.rs` | domain | `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` |
-| `backend/src/core.rs` | core | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` |
-| `backend/src/run.rs` | run | `run` and its private steps; `pub use` of `run/*` |
-| `backend/src/run/port.rs` | run | `LedgerStore`, `SeenIds` |
-| `backend/src/run/row.rs` | run | `Row`, `RowError`, `SourceError`, `RunError` |
-| `backend/src/run/summary.rs` | run | `Summary`, `Accounts`, `Report` |
-| `backend/src/memory.rs` | memory | `MemoryLedger`, `MemorySeenIds` |
-| `backend/tests/it/main.rs` | each | `mod support;` and one `mod` per source module |
-| `backend/tests/it/support.rs` | domain, run, memory | the harness, verbatim; `mod` lines for its helpers; `infallible` |
-| `backend/tests/it/support/generate.rs` | domain, core, run, memory | amount and balance generators; `InputRow`, its builders, `Edge`, `Fresh`, `Unique`; `address` |
-| `backend/tests/it/support/model.rs` | domain, run | the amount grammar and `Units`; the naive engine and `Printed` |
-| `backend/tests/it/support/stores.rs` | run, deleted in memory | store doubles |
-| `backend/tests/it/{domain,core,run,memory}.rs` | each | that module's laws |
+| `amount_spelling` | an edge one in four, else a number-shaped spelling or loose characters, as often each | `prop_oneof![2 => edge, 3 => number-shaped, 3 => characters]` |
+| `amount_value` | an edge one in four, else `next_u64 >> below(64)` and a fraction | `prop_oneof![1 => edge, 3 => (any::<u64>(), 0..64, 0..10_000)]` |
+| `any_text` | an edge one in four, else up to 16 characters | `prop_oneof![1 => edge, 3 => vec(character, 0..=16)]` |
+| `direction`, `move_amount`, `ordinary_amount` | single draws | `any::<bool>()`; `prop_oneof![1 => edge, 3 => 1..=9_999_999 units]`; `(0..100, option::of(vec(digit, 1..=4)))` |
+| `balance_moves` | each move repeats the last the other way one in four, else zeroes the balance one in four, else is fresh | `vec(move draw, 0..=12)`; each draw names repeat, zero or fresh and carries its fresh move, used when the other two do not apply |
+| `rows` | ordinary rows and, one in four, an edge's rows, until the drawn count | `vec(draw, 0..=16)`: an ordinary draw or one of the seven edge draws, every pick among earlier rows an `Index`, interpreted by `Draft` while it holds fewer rows than draws, then cut to 16 |
+| `commands`, `events`, `address` | derived or single draws | `rows()` read as commands; `vec(event, 0..=12)`; a client and a tx id from their tables |
+| `interleave` | the next client drawn among those waiting | turns, `vec(any::<Index>(), 16)`, each indexing the clients still waiting |
+| run: `broken_source`, `reordering` | a position and an error; an interleaving | `(rows(), any::<Index>(), select(SOURCE_ERRORS))`; `(rows(), turns)` |
+| memory: `operations`, `load_address`, sightings | a probe, then a commit per event at a drawn address with a probe after it, one in two | `(option::of(probe), vec((event, address, option::of(probe)), 0..=12))`, interpreted with the reference and `evolve`; `vec(select(SIGHTED), 0..=24)` |
 
-## Interfaces
+## Phases
 
-Every public item of stage 1. Each derives `Debug`; the derives listed are the ones the laws and
-the stores need. Doc comments are omitted here and written in the code.
+### Phase 0 — evidence (read-only)
 
-```rust
-// domain::id — no invariant beyond the integer, so `From` is the constructor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)] pub struct ClientId(u16);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)] pub struct TxId(u32);
-impl From<u16> for ClientId {}  impl From<u32> for TxId {}
-// A command's address: its client and tx id, where its footprint is loaded and committed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Address { client: ClientId, tx: TxId }
-impl Address { pub fn new(client: ClientId, tx: TxId) -> Self; pub fn client(self) -> ClientId; pub fn tx(self) -> TxId; }
+Run in scratch packages and in copies of the repository, never in this checkout.
 
-// domain::money — `FromStr` is `Amount`'s only constructor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)] pub struct Amount(Decimal);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AmountError { Malformed, TooPrecise, TooLarge, Zero }  // checked in this order
-impl FromStr for Amount { type Err = AmountError; }
-impl Display for Amount {}                                        // exactly four decimals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)] pub struct Balance(Decimal);
-impl Balance {
-    pub const ZERO: Self;
-    pub fn checked_add(self, other: Self) -> Option<Self>;
-    pub fn checked_sub(self, other: Self) -> Option<Self>;
-}
-impl From<Amount> for Balance {}
-impl Display for Balance {}                                       // four decimals, never -0.0000
+- [x] proptest 1.12.0 and 1.11.0 resolve, build and pass on 1.88.0 with
+  `default-features = false, features = ["std"]`; `cargo clippy --all-targets -- -D warnings` is
+  clean under this workspace's lints and `clippy.toml`.
+- [x] `make deps` in a copy of the repository with the dev-dependency names the crates it would
+  admit: the 14 listed above for 1.12.0, 17 for 1.11.0.
+- [x] Seeds: a random seed per run; `PROPTEST_RNG_SEED` replays a run; a failure prints a `cc`
+  line and saves it to `backend/tests/proptest-regressions/<module>.txt` for this crate's layout,
+  replayed first on the next run; `PROPTEST_DISABLE_FAILURE_PERSISTENCE` turns that off.
+- [x] `TestRunner::run(&strategy, Fn(value) -> TestCaseResult)` outside the macro: a panic is a
+  failure with its message, the input is shrunk, and failures persist only when the config names
+  a source file. `contextualize_config` is public and applies the `PROPTEST_*` variables.
+- [x] `diff -r` of 1.11.0 and 1.12.0: no added line touches `unsafe`, files, processes, the
+  network or the environment; in 1.12.0's graph only `getrandom` and `libc` have build scripts.
 
-// domain::ledger — fields private; readings are methods; one constructor each.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Account { available: Balance, held: Balance, lock: Lock }
-impl Account {
-    pub(crate) fn new(available: Balance, held: Balance, lock: Lock) -> Self;  // core ticket
-    pub fn available(&self) -> Balance;
-    pub fn held(&self) -> Balance;
-    pub fn total(&self) -> Option<Balance>;                       // available + held, checked
-    pub fn is_locked(&self) -> bool;
-    pub(crate) fn lock(&self) -> Lock;                            // core ticket
-}
-// Whether a chargeback has locked the account; nothing unlocks it. Public, so the domain commit,
-// where nothing builds one yet, raises no `dead_code`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Lock { Unlocked, Locked }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Deposit { amount: Amount, status: Status }
-impl Deposit {
-    pub(crate) fn new(amount: Amount, status: Status) -> Self;    // core ticket
-    pub fn amount(&self) -> Amount;
-    pub fn status(&self) -> Status;
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Status { Settled, Disputed }
-// What one command touches, at its address (its client and tx id): the account, and the deposit
-// under that tx id, `None` when nothing was recorded there or a chargeback removed it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Footprint { account: Account, deposit: Option<Deposit> }
-impl Footprint {
-    pub fn new(account: Account, deposit: Option<Deposit>) -> Self;  // evolve, and every store's load
-    pub fn account(&self) -> &Account;
-    pub fn deposit(&self) -> Option<&Deposit>;
-}
+### Task 1 — the record
 
-// domain::command — every command carries its address.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Command { Client(ClientCommand), Dispute(DisputeCommand) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClientCommand { Deposit { address: Address, amount: Amount }, Withdrawal { address: Address, amount: Amount } }
-impl ClientCommand { pub fn address(&self) -> Address; }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DisputeCommand { Dispute(Address), Resolve(Address), Chargeback(Address) }
-impl DisputeCommand { pub fn address(&self) -> Address; }
+- [x] The next record in `docs/adr/`, from `template.md`, as Decisions for sign-off describes it;
+  its index line; the superseded record's Status set to `Superseded by` the new record's number.
+- [x] Per-commit gate, then commit alone: `74dad33`, signed. The code-reviewer's four should-fixes
+  and five nits were all taken before it landed; `make ci` green, 26 passed.
 
-// domain::event — an event carries what `evolve` needs and no id: it applies at its command's address.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Event { Opened, Client(ClientEvent), Dispute(DisputeEvent) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum ClientEvent { Deposited(Amount), Withdrawn(Amount) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum DisputeEvent { Held(Amount), Released(Amount), ChargedBack(Amount) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Reason { Client(ClientReason), Dispute(DisputeReason), Overflow }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ClientReason { DuplicateTx, AccountLocked, InsufficientFunds }      // checked in this order
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DisputeReason { UnknownDeposit, NotSettled, NotDisputed }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Sight { First, Repeat }
+### Task 2 — the gate
 
-// core — pure and total; the decider's initial state is `None`, a client with no account.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct Overflow;  // Display, Error
-pub fn open() -> Footprint;                                       // what `Opened` makes: zero, unlocked, no deposit
-pub fn decide_client(account: &Account, command: &ClientCommand, sight: Sight) -> Result<ClientEvent, ClientReason>;
-pub fn decide_dispute(deposit: Option<&Deposit>, command: &DisputeCommand) -> Result<DisputeEvent, DisputeReason>;
-pub fn evolve(state: Option<Footprint>, event: &Event) -> Result<Footprint, Overflow>;
-// `evolve(None, e)` applies `e` to `open()`; `Opened` on an open account changes nothing.
+- [x] `backend/Cargo.toml`: `[dev-dependencies]` with
+  `proptest = { version = "1.12", default-features = false, features = ["std"] }`.
+- [x] `cargo check --workspace --tests`, once without `--locked`, records proptest in
+  `Cargo.lock`; the lock's diff only adds packages: "Locking 12 packages", proptest 1.12.0 and 11
+  others; the one removed line is a lock-only `getrandom` naming `r-efi 5.3.0` beside the new
+  6.0.0, no pin changed. Before the Makefile changed, `make deps` failed naming exactly the 14
+  crates of the record.
+- [x] `Makefile`: `ADMITTED_DEV` and the no-dev check, each graph read once with `|| exit 1`.
+- [x] `make deps` green. With proptest moved to `[dependencies]` by hand, `make deps` fails: "The
+  program build graph holds crates admitted for tests only", the 14 listed; with `unarray` dropped
+  from `ADMITTED_DEV`, it fails: "The build graph holds crates no decision record admits: unarray".
+  Both undone by editing; green again.
 
-// run — the ports, declared beside their consumer: synchronous, owned values, their own error.
-pub trait LedgerStore {
-    type Error;
-    fn load(&self, address: Address) -> Result<Option<Footprint>, Self::Error>;  // `None`: no account
-    fn commit(&mut self, address: Address, footprint: Footprint) -> Result<(), Self::Error>;
-    fn snapshot(&self) -> Result<Accounts, Self::Error>;
-}
-pub trait SeenIds { type Error; fn sight(&mut self, tx: TxId) -> Result<Sight, Self::Error>; }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Row { Parsed(Command), Malformed(RowError) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RowError { Unreadable, TooManyFields, MissingAmount, InvalidAmount(AmountError) }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum SourceError { Unreadable, IncompleteHeader }
-#[derive(Debug, PartialEq, Eq)] pub enum RunError<L, S> { Source(SourceError), Ledger(L), Seen(S) }
-#[derive(Debug, Clone, PartialEq, Eq)] pub struct Summary { pub accounts: Accounts, pub report: Report }
-#[derive(Debug, Clone, PartialEq, Eq)] pub struct Accounts(BTreeMap<ClientId, Account>);
-impl Accounts { pub fn by_client(&self) -> impl Iterator<Item = (ClientId, Account)> + '_; }
-impl FromIterator<(ClientId, Account)> for Accounts {}
-// A reason or a kind is listed only once it has happened, so every count is at least one.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Report { rejected: BTreeMap<Reason, NonZeroU64>, malformed: BTreeMap<RowError, NonZeroU64> }
-impl Report {
-    pub fn rejected(&self) -> impl Iterator<Item = (Reason, NonZeroU64)> + '_;
-    pub fn malformed(&self) -> impl Iterator<Item = (RowError, NonZeroU64)> + '_;
-}
-pub fn run<L: LedgerStore, S: SeenIds>(
-    rows: impl IntoIterator<Item = Result<Row, SourceError>>,
-    ledger: &mut L,
-    seen: &mut S,
-) -> Result<Summary, RunError<L::Error, S::Error>>;
+### Task 3 — runner and strategies
 
-// memory — `Error = Infallible`; an empty store is a real value, so `Default` builds one.
-#[derive(Debug, Default)]
-pub struct MemoryLedger { accounts: BTreeMap<ClientId, Account>, deposits: HashMap<Address, Deposit> }
-#[derive(Debug, Default)] pub struct MemorySeenIds(HashSet<TxId>);
-```
+- [x] `support.rs`: `CASES`; `Failure` (a counterexample with its shrunk input and reason, or an
+  aborted run); `for_all(law, strategy, holds)` over `TestRunner`, with the caller's file as the
+  source file and `contextualize_config` applied; `infallible` kept.
+- [x] `support/generate.rs`: the Strategy map, each doc comment still saying what the strategy
+  draws.
+- [x] `cargo check --workspace --tests` compiles `support/`: with the old callers, every error it
+  reported in `support/` was a note of a caller's error; with Task 4's callers, it compiles with
+  no warning.
 
-Why these shapes, where the records leave a choice:
+### Task 4 — laws
 
-- `Footprint` is a domain type: *State partitioned by client* defines the footprint, and the
-  store, the core and the runtime all exchange it. Every command names a tx id, so a footprint
-  sits at its command's `Address`, which the runtime passes to `load` and `commit`. The address
-  stays outside the value: `open()` builds a footprint without an id, and no footprint can
-  disagree with the address it is stored at.
-- `Address` types the glossary's *address*: one value, where a client and a tx id passed apart
-  could come from two commands. Commands carry it; events carry no id at all, since `evolve` reads
-  none, and a log that keeps events pairs each with its address in the adapter that writes it.
-- For a client command, the deposit at its address plays no part: a first sight means nothing
-  was recorded under the id, and a repeat is rejected, committing at most an account it just
-  opened, which has no deposits. A withdrawal's footprint therefore holds none.
-- Each absence has one meaning: `Option<Footprint>` is a client with no account;
-  `Option<Deposit>` is no deposit of this client under that id, whether never recorded or charged
-  back, which *A per-deposit dispute lifecycle* makes the same thing.
-- `evolve` takes `Option<Footprint>` so `Opened` is an event like any other while `decide_*`
-  only ever see an open account; `None` is the state every client starts from. `open()` is the
-  footprint `Opened` makes, and the runtime opens an account with it: it cannot fail, so no
-  runtime path handles an overflow that opening cannot cause. An event that changes a deposit sets
-  it from its own amount and the others leave it, so `evolve` never reads the deposit it replaces,
-  and a commit writes or removes the deposit at the command's address. After a rejection the
-  runtime commits only an account it just opened, whose footprint holds no deposit.
-- Each decision returns exactly what it can: `decide_client` a `ClientEvent` or a `ClientReason`,
-  `decide_dispute` a `DisputeEvent` or a `DisputeReason`, the overview's Commands table as two
-  signatures. `Event` and `Reason` nest the two families, and the runtime widens by hand
-  (`.map(Event::Client).map_err(Reason::Client)`), since `rust-errors` keeps `From` for foreign
-  errors.
-- `Lock` stands where a `bool` would: `Account::new(available, held, Lock::Locked)` says at the
-  call site what `true` would hide.
-- `Account`, `Deposit` and `Footprint` keep their fields private, as the Rust reference of
-  `functional-architecture` asks, and readings are methods. Each has one constructor: `Account::new`
-  and `Deposit::new` are `pub(crate)`, since only `evolve` builds them, so every account and
-  deposit a test sees came from `evolve`; `Footprint::new` is public, since it pairs an account
-  and a deposit its caller already holds, which is how `evolve` and every store's `load` build one.
-- `RunError` is generic over the stores' errors, so `Infallible` stores make those variants
-  uninhabited instead of erased.
-- `Report` counts by finite keys, so its size is bounded by the number of kinds, and each count
-  is a `NonZeroU64`, since a key is listed only once it has happened; `RowError` carries the
-  `AmountError` so the count keeps why an amount was refused.
+- [x] `domain.rs`, `core.rs`, `run.rs`, `memory.rs` on the new `for_all`; each law body unchanged
+  apart from its generator argument: `git diff -w` shows only the calls' arguments.
+- [x] `make ci` green: "test result: ok. 26 passed; 0 failed".
+- [x] Before (the record's commit) and after, in scratch copies with their own `target/`: a clean
+  `cargo test --workspace --locked --no-run` takes 2.4 s and 4.2 s; the 26 tests run in 0.09 s
+  and 0.36 s.
 
-## Generators
+### Task 5 — evidence
 
-Shared through `backend/tests/it/support/generate.rs`; every value enters through production
-parsing, so every counterexample is input a source can deliver. One draw in four, `EDGE_ODDS`,
-takes an edge.
+- [x] With the work staged and `PROPTEST_DISABLE_FAILURE_PERSISTENCE=1`, each of the 25 laws fails
+  against its stage 1 break, with its shrunk counterexample in Law evidence; after each undo,
+  `git diff --quiet` exits 0. 29 breaks, 25 laws, every run `test rc=101`; no regression file
+  written.
+- [x] With persistence on, one break writes a regression file holding a `cc` line, and the next
+  run fails on the replayed case before any new one; the file is deleted, the break undone, and
+  `git status --short` shows only the staged work. The spelling law's `+` break: the first run
+  printed "Saving this and future failures in
+  .../backend/tests/proptest-regressions/domain.txt" and `cc 1695…f706`, the file held that line
+  "# shrinks to "+0"", and the second run failed on `"+0"` with nothing new saved.
 
-- `amount_spelling` — raw text: an `AMOUNT_EDGES` spelling; or a number-shaped spelling (up to
-  seventeen whole digits with leading zeros, an optional point, up to six fraction digits); or up
-  to eight characters drawn from digits, `.`, `-`, `+`, `e`, ` `, `_`, `,` and a non-ASCII digit.
-- `amount_value` — `(whole, fraction)` with `fraction < 10_000`; edges `(0, 0)`, `(0, 1)`,
-  `(1, 0)`, `(0, 9_999)`, `(999_999_999_999_999, 9_999)`, `(1_000_000_000_000_000, 0)`,
-  `(u64::MAX, 9_999)`; otherwise a whole part of random magnitude.
-- `any_text` — for totality: up to sixteen characters mixing ASCII digits, punctuation and
-  letters with multi-byte characters (`'\u{663}'`, `'\u{ff11}'`, `'\u{e9}'`, `'\u{feff}'`); edges:
-  empty, sixty-four zeros then `1`, a multi-byte character after a point.
-- `balance_moves(random: &mut Gen) -> Vec<(Direction, String)>`, with
-  `pub(crate) enum Direction { Credit, Debit }` — up to twelve moves, each the text of a valid
-  amount: `{whole}.{fraction:04}` with `whole < 1000` and not both parts zero, or one of `0.0001`
-  and `999999999999999.9999`. One draw in four instead repeats the previous amount in the
-  opposite direction, so a balance lands on zero from either side; and, while the balance's
-  magnitude is an amount, one draw in four of the rest moves the whole balance back to zero,
-  spelled without trailing zeros, so a balance whose last decimal is zero also lands on zero
-  through an amount spelled with fewer decimals.
-- `InputRow` (core, extended in run) — a row of the input as a source reads it, before parsing.
-  Its fields stay raw on purpose (`rust-properties`): a missing amount is `None`, never `Some("")`,
-  and no amount is padded with spaces, since the CSV source reads an empty field as absent and
-  trims every field. The core ticket adds `Fields` and `Kind`; the run ticket adds `Unreadable`
-  and `TooManyFields`:
+### Task 6 — docs and skills
 
-  ```rust
-  pub(crate) enum InputRow { Fields { kind: Kind, client: u16, tx: u32, amount: Option<String> }, Unreadable, TooManyFields }
-  pub(crate) enum Kind { Deposit, Withdrawal, Dispute, Resolve, Chargeback }
-  ```
+- [x] `rust-properties/SKILL.md`: totality, labels, raw spelling, edge weights, seeds and replay
+  on proptest; a rule for choices then interpretation; a rule against filtering what can be built;
+  Verify with `make test`, `PROPTEST_CASES` for a deeper run and the regression file for replay.
+- [x] `references/proptest.md` in place of `references/harness.md`: `for_all`, a worked pair of
+  round trips, a strategy whose draws depend on earlier ones, a state-machine driver, and
+  replaying a failure. Every example ran in a scratch crate under this workspace's lints: clippy
+  clean; the delegating parser's spelling law shrinks to `"+1"` or `"01"`, and the state machine
+  broken to reopen a `Recorded` order shrinks to `[Submit, Written, Submit]` in three runs of
+  three; the replay lines are this plan's persistence run.
+- [x] `rust-effects`: the harness sentence removed. `review-and-planning`: the test-only check in
+  the present tense, and the harness lesson's rules (propose the crate before hand-rolling what it
+  does; name the crate a copied piece of infrastructure stands in for). `tasks/lessons.md`: the
+  lesson's graduation line. `functional-architecture`'s pointer to `rust-properties` names
+  strategies and their runner.
+- [x] `CLAUDE.md` § Dependencies and § Tests, and `README.md`, in step with the record.
+- [x] `git grep -n -E 'PROPERTY_SEED|SplitMix|EDGE_ODDS|EVEN_ODDS|one_in|harness\.md' -- .
+  ':!tasks' ':!docs/prompts'` lists nothing.
 
-- Row builders (core) — `deposit(client, tx, amount)`, `withdrawal(client, tx, amount)`,
-  `dispute(client, tx)`, `resolve(client, tx)`, `chargeback(client, tx)`, each an
-  `InputRow::Fields`. Edge episodes and fixtures are written with them, so they read like the
-  overview's rows: `[deposit(2, 20, "10"), withdrawal(2, 21, "10"), dispute(2, 20), chargeback(2, 20)]`.
-- `rows` (core, extended in run) — up to sixteen input rows. Ordinary draws: any kind, a client
-  from `[1, 2, 3]`, a fresh tx for a deposit or withdrawal, a recorded deposit's tx (any client's)
-  for a dispute command, an amount `whole[.digits]` with `whole < 100`. One draw in four takes an
-  `Edge`, picked uniformly from `EDGES`:
+### Task 7 — commit
 
-  ```rust
-  enum Edge { RepeatedTx, UnknownTx, ForeignTx, AfterChargeback, ExactBalance, BoundaryAmount, MalformedRow }
-  ```
+- [x] Per-commit gate; commit with the message in Commits. `make ci` green, 26 passed; the
+  code-reviewer's two should-fixes and the final review's minors taken (Review); the greps and the
+  record scan silent.
+- [x] Review below.
 
-  1. `RepeatedTx`: a deposit or withdrawal reusing any earlier deposit or withdrawal tx;
-  2. `UnknownTx`: a dispute command naming `u32::MAX`, `4_000_000_000` or a withdrawal's tx;
-  3. `ForeignTx`: a dispute command naming another client's deposit;
-  4. `AfterChargeback`: on a fresh client, two deposits, a dispute and a chargeback of the first,
-     then up to three of: a deposit, a withdrawal, any dispute command on either deposit;
-  5. `ExactBalance`: on a fresh client, a deposit, optionally a second deposit and its dispute,
-     then a withdrawal of exactly the first amount, optionally followed by `0.0001` more;
-  6. `BoundaryAmount`: a deposit or withdrawal of `0.0001`, `999999999999999.9999`,
-     `1000000000000000`, `0`, `0.00001`, `1.50000` or `0001.5`;
-  7. `MalformedRow` (run ticket): an unreadable row, a row with too many fields, a deposit or
-     withdrawal with no amount, or one whose amount is an `AMOUNT_EDGES` spelling other than
-     `""`, `" 1"` and `"1 "`, which no source delivers.
+## Law evidence
 
-  A repeated tx id comes, one draw in two, from the client of the row it repeats, which reaches
-  locked accounts; otherwise repeated and unknown edges draw the client from
-  `[1, 2, 3, 0, u16::MAX]`. `Fresh { client, tx }` hands out fresh ids, clients from 100 and tx
-  ids from 0, so neither collides with an edge id.
-- `commands` (core) — the rows that read as commands, through `command(&InputRow) ->
-  Option<Command>`; `events` (core) — up to twelve events of every kind, amounts parsed from valid
-  spellings including `0.0001` and `999999999999999.9999`; `address(random: &mut Gen) -> Address`
-  (memory) — one address, a client from `[1, 2, 3, 0, u16::MAX]` and a tx id from
-  `[1, 2, 3, 0, u32::MAX]`, so addresses recur and the store laws meet every boundary id.
-- `unique` and `interleave` (run) — `unique(&[InputRow]) -> Unique` drops malformed rows and every
-  deposit or withdrawal whose tx an earlier one used; `interleave(random, &Unique) -> Unique` merges
-  the per-client sequences in random order, keeping each client's order. Only these two build a
-  `Unique(Vec<InputRow>)`, read through `Unique::rows(&self) -> &[InputRow]`, so the reordering
-  law's hypothesis is its parameter's type.
+One row per break, filled in Task 5: the law, its break from the stage 1 tickets, and the
+counterexample proptest shrank it to. Commands and rows are written `deposit(client, tx, amount)`,
+`withdrawal(…)`, `dispute(client, tx)`, `resolve(…)` and `chargeback(…)`, a row's amount quoted as
+its text; a store operation names its address as `(client, tx)`. The second balance break is the
+one the stage 1 final review added, rebuilt here: `checked_sub` negates a zero reached across two
+scales. The table is the run on the code as committed, after the review fixes: every break failed
+(`test rc=101`, 29 of 29) and was undone (`git diff --quiet` exits 0), and no regression file was
+written.
+
+| Law | Break | Shrunk counterexample |
+|---|---|---|
+| `prop_amount_text_parses_back_to_its_value` | the size check refuses fifteen whole digits (`>=`) | `AmountValue { whole: 999999999999999, fraction: 9999 }` |
+| `prop_amount_spelling_parses_exactly_when_the_grammar_admits_it` | `from_str` strips a leading `+` first | `"+1"` |
+| `prop_amount_parsing_never_panics` | `from_str` reads `text.as_bytes()[0]` first | `""`, panicking: index out of bounds |
+| `prop_balance_never_prints_negative_zero` | `checked_sub` computes `-(other - self)` | `[(Credit, "0.0001"), (Debit, "0.0001")]` |
+| `prop_balance_never_prints_negative_zero` | `checked_sub` negates a zero reached across two scales | `[(Credit, "0.0001"), (Debit, "0.0001"), (Credit, "711.6569"), (Credit, "0.0001"), (Debit, "711.657")]` |
+| `prop_decide_never_changes_state` | a `static` `AtomicBool` that `decide_client` flips on every call | `[deposit(1, 0, 1)]` |
+| `prop_evolve_is_total` | `Released` reads the footprint's deposit with `.expect("disputed")` | `([deposit(1, 0, 0.1)], [Released(0.0001)])`, panicking: disputed |
+| `prop_held_is_the_sum_of_disputed_deposits_and_never_negative` | `Released` leaves `held` unchanged | `[deposit(1, 1, 1), dispute(1, 1), resolve(1, 1)]` |
+| `prop_total_is_deposited_minus_withdrawn_minus_charged_back` | `ChargedBack` leaves `held` unchanged | `[deposit(100, 0, 1), dispute(100, 0), chargeback(100, 0)]` |
+| `prop_locked_exactly_when_charged_back` | `ChargedBack` keeps the account's lock | `[deposit(2, 0, 1), dispute(2, 0), chargeback(2, 0)]` |
+| `prop_only_held_makes_available_negative` | `InsufficientFunds` compares with `total` | `[deposit(100, 1, 0.1), dispute(100, 1), withdrawal(100, 3, 0.0001)]` |
+| `prop_dispute_lifecycle_allows_exactly_its_transitions` | resolve on a `Settled` deposit answers `Released` | `[deposit(3, 0, 0.0001), resolve(3, 0)]` |
+| `prop_client_commands_follow_the_commands_table` | `InsufficientFunds` when the amount is not below `available` (`>=`) | `[deposit(100, 0, 0.1), withdrawal(100, 1, 0.1)]` |
+| `prop_client_commands_follow_the_commands_table` | the lock checked for deposits only | `[deposit(100, 0, 0.1), dispute(100, 0), chargeback(100, 0), withdrawal(100, 2, 0.1)]` |
+| `prop_first_command_opens_the_account` | `open` locks the account | `[deposit(1, 0, 0.1)]` |
+| `prop_first_command_opens_the_account` | `Opened` makes `open()` from a loaded footprint | `[deposit(2, 0, 1), dispute(2, 0)]` |
+| `prop_tx_ids_are_consumed_on_first_sight_across_clients` | withdrawals skip intake and are decided as `Sight::First` | `[deposit(1, 0, "0.1"), withdrawal(1, 0, "0.1")]` |
+| `prop_rejection_changes_no_balance` | after a rejection at a loaded footprint, `apply_at` commits `open()` | `[deposit(100, 0, "0"), deposit(100, 1, "0.1"), dispute(100, 0), chargeback(100, 0)]` |
+| `prop_malformed_rows_are_skipped_and_counted` | `Row::Malformed` is skipped uncounted | `[Unreadable]` |
+| `prop_source_error_stops_the_run_with_no_summary` | an `Err` row is skipped like a malformed row | `BrokenSource { rows: [], position: 0, first: Unreadable }` |
+| `prop_source_error_stops_the_run_with_no_summary` | the source collected whole before the run | `BrokenSource { rows: [], position: 0, first: Unreadable }` |
+| `prop_report_stays_bounded` | rejections kept as a `Vec`, one entry per refused row | `[withdrawal(1, 0, "0.1"), deposit(100, 1, "0"), deposit(100, 2, "0"), dispute(100, 1), chargeback(100, 1)]` |
+| `prop_same_rows_give_the_same_summary` | a `static` run counter added to the first rejection count | `[withdrawal(1, 0, "0.1")]` |
+| `prop_reordering_clients_changes_no_account` | a one-entry footprint cache keyed by the tx id alone | original `[dispute(1, 0), deposit(1, 1, "0.1"), dispute(2, 1)]`, interleaved `[dispute(1, 0), dispute(2, 1), deposit(1, 1, "0.1")]` |
+| `prop_engine_agrees_with_the_naive_model` | `InsufficientFunds` when the amount is not below `available` | `[deposit(100, 0, "0.1"), withdrawal(100, 1, "0.1")]` |
+| `prop_read_returns_what_the_last_commit_wrote` | `commit` removes nothing when the footprint holds no deposit | `[Commit((3, 1), a Settled deposit of 0.0001), Commit((3, 1), no deposit), Load((3, 1))]` |
+| `prop_commit_writes_account_and_deposit_together` | `commit` skips the account when the footprint holds a deposit | `[Commit((1, 1), a Settled deposit of 0.0001)]` |
+| `prop_snapshot_reflects_every_commit_before_it` | `snapshot` leaves out accounts whose balances are all zero | `[Commit((1, 1), zero balances, no deposit), Snapshot]` |
+| `prop_recorded_id_stays_recorded` | `sight` forgets an id when it answers `Repeat` | `[4294967295, 4294967295, 4294967295]` |
 
 ## Commits
 
-The amended records commit keeps its message. Each new message is written to a scratch file
-outside the repository and committed with `git commit -F <file>`.
-
 ```text
-feat(domain): parse amounts once into exact four-decimal money
+docs(adr): record csv, serde, rust_decimal and proptest as dependencies
 
-> Every later layer receives ids, amounts and balances that cannot hold a bad value, and the
-> dependency gate now proves the build graph holds only admitted crates.
+> The property tests can use a maintained property-testing crate, and the dependency gate keeps
+> it, and every crate it brings, out of the shipped program.
 ```
 
 ```text
-feat(core): decide and evolve ledger commands as a pure decider
+test(it): run the laws on proptest strategies that shrink
 
-> Every money rule is a total function of a footprint and a command, held by state-machine laws
-> independent of any runtime or store.
+> A failing law now reports a minimal counterexample and replays from a regression file, and the
+> project no longer maintains its own generator, runner and seed handling.
 ```
 
-```text
-feat(run): run commands in arrival order over the store ports
-
-> Rows flow through intake, the decider and the stores with each failure tier typed, and the
-> result equals a naive model of the rules: the reference every later runtime must match.
-```
-
-```text
-feat(memory): keep the ledger in memory stores held to the store laws
-
-> The library runs end to end on in-memory stores, ready for the command-line runtime.
-```
-
-```text
-docs(prompts): add prompt history 0002 (stage 1 planning)
-
-> The path from the request to the approved plan, its domain-model records and their skills stays
-> reproducible.
-```
-
-```text
-docs(prompts): add prompt history 0003 (stage 1 library core)
-
-> The path from the approved plan to the four commits of the library core stays reproducible.
-```
+When the session closes, its prompt history follows alone, as the `prompt-history` skill says.
 
 ## Per-commit gate
 
-1. `make ci` — green; the test summary line goes in the ticket.
-2. Each of the ticket's laws has its failure line in Law evidence, from its deliberate break
-   rather than a stub, and every break is undone: `git diff --quiet` exits 0.
-3. The code-reviewer agent reviews the staged diff; blockers and should-fixes are fixed and
+1. `make ci` green.
+2. The code-reviewer agent reviews the staged diff; every blocker and should-fix is acted on and
    `make ci` re-run.
-4. The two forbidden-name greps of Global constraints: both silent. No record cited by
-   number or filename outside the decision logs: `git grep -n --untracked -E
+3. The two forbidden-name greps of Global constraints, both silent. No record cited by number or
+   filename outside the decision logs: `git grep -n --untracked -E
    'docs/(adr|design)/[0-9]{4}|ADR ?[0-9]+|[Dd]ecision #?[0-9]+|record #?[0-9]+' -- .
    ':!docs/adr' ':!docs/design' ':!.claude/skills/architecture-decisions'` lists nothing.
-5. `git status --short` lists only the ticket's files and `docs/prompts/0002-stage-1-planning.md`,
-   untracked until Closing; the message comes from `git commit -F`.
+4. `git status --short` lists only the commit's files.
+
+## Review focus
+
+1. Every draw list interprets, shrunk ones included: an empty list, a pick with nothing earlier
+   to pick from, a repeat with no previous move. Each falls back as today's generator does.
+2. Each strategy draws the population its doc comment describes, with today's edge tables and
+   weights.
+3. The no-dev check reads the program's graph, shown by its deliberate break.
+4. No law is weakened: each body is unchanged apart from its generator argument.
 
 ## Risks
 
-- Names the records fix, such as `RunError` in `run` and `MemoryLedger` in `memory`, raise no
-  lint: under clippy 0.1.88 a probe with the workspace's lints passed clean, since
-  `module_name_repetitions` is not in the pedantic group. Write no `#[expect]` for it; one would
-  fail as an unfulfilled expectation.
-- A module named `core` sits beside the `core` crate. A scratch probe under the workspace's lints
-  passed clean; only a bare `core::` path at a crate root would resolve to the module, and
-  neither crate writes one.
-- `make deps` runs `cargo tree` online: on a cold cache it downloads every locked crate to read
-  its manifest, about 42 MB with `--target all`, since `--offline` fails there.
-- Until the CSV source lands, generators build `Row` values and amounts are the only free text
-  fed through production parsing; the CSV ticket moves the generators onto the source, as
-  *Correctness defined by laws and a model* requires.
-- Boundary constructors with no production caller yet, as the person decided on 2026-10-10:
-  `ClientId::from`, `TxId::from` and `Address::new` are the library's boundary API, through which
-  an adapter turns parsed fields into domain values. In stage 1 only the generators call them; the
-  CSV source does from the next stage. They are not helpers kept for a test, which `CLAUDE.md`
-  § Tests rules out: no test reaches anything through them that the public API would otherwise
-  hide.
-- The views' boundary API likewise, by the build session's ruling: `FromIterator<(ClientId,
-  Account)> for Accounts` is how a store's `snapshot` builds the view, and only the run ticket's
-  store double calls it until `MemoryLedger` does in the memory ticket; `Accounts::by_client`,
-  `Report::rejected` and `Report::malformed` are what the sinks read from the next stage, and
-  until then only the laws read them. They are the views' public API, not helpers kept for a test.
-
-## Deliberately deferred
-
-- `Display` for `Reason`, `ClientReason` and `DisputeReason`: the report's stderr lines arrive
-  with `main.rs`, their first reader.
-
-- `main.rs`, `CsvSource` and `render_csv`, `csv` and `serde`, black-box tests through the binary,
-  and benchmarks: the next stage.
-- Store failures: the memory stores cannot fail (`Infallible`), so the `Ledger` and `Seen`
-  variants of `RunError` are first exercised by a store that can.
-- `Reason::Overflow`: unreachable below the amount cap, as *Exact decimal amounts with four
-  places* records; no test reaches it without bypassing `Amount`.
-- Exactness past 7.9 × 10^24: `rust_decimal`'s `checked_add` is `None` only when the whole part
-  overflows, and rounds silently before that. `Balance` wraps it as it is and documents the
-  bound; the same record keeps every reachable balance below it.
-
-## Tickets
-
-Done in the planning session, before execution:
-
-- [x] **amend the records commit** — *A domain model in the records' language* and *Entities
-      identified by their keys*, signed off (`Draft` to `Accepted`), with their index lines;
-      `.claude/skills/domain-modeling/SKILL.md` and `.claude/skills/curry-howard/SKILL.md`; and
-      their syncs: `CLAUDE.md` (principle and skill rows), `.claude/agents/code-reviewer.md`
-      (reads both skills; a domain-model check), `.claude/skills/functional-architecture/SKILL.md`
-      (links both), `.claude/skills/rust-properties/references/harness.md` (the `Seed` type, which
-      the domain ticket copies verbatim), `README.md`, `docs/overview.md` (Terms gains *address*),
-      `docs/architecture.md`, `docs/patterns.md`. After the per-commit gate, `git commit --amend
-      --no-edit` on the base commit, which kept its message.
-
-Each task below is one ticket and one commit, in order. Its brief is its ticket file, read whole;
-its commit message is under Commits, and the Per-commit gate closes it. This plan, the four
-tickets and the planning lesson land with the domain commit; each later commit ticks its task
-here and fills its ticket's evidence.
-
-### Task 1: stage-1-domain
-
-- [x] `tasks/stage-1-domain.md`: `rust_decimal` admitted and `make deps` reading the build graph;
-      ids, `Amount`, `Balance`, account and history types, commands, events; four laws.
-
-### Task 2: stage-1-core
-
-- [x] `tasks/stage-1-core.md`: the decider and nine laws through a state-machine driver. The
-      overview's *a rejection changes no balance* is a fact of the core's types, since a rejection
-      carries no event and only an event changes a footprint, so run checks it where it can fail.
-
-### Task 3: stage-1-run
-
-- [x] `tasks/stage-1-run.md`: ports, rows, errors, projections and the sequential runtime; eight
-      laws over store doubles, the rejection law among them.
-
-### Task 4: stage-1-memory
-
-- [x] `tasks/stage-1-memory.md`: `MemoryLedger` and `MemorySeenIds`, four store laws, run's laws
-      moved onto them, the worked example end to end.
-
-## Closing
-
-After Task 4, in this order:
-
-1. The whole-branch review covers the four task commits. Its base is the amended records commit,
-   not `git merge-base main HEAD`, which since the amend is the workspace commit. Each fix passes
-   the Per-commit gate and becomes a `git commit --fixup=<sha>` of the commit it belongs to; then
-   `git rebase --autosquash --exec 'make ci' <records commit>` squashes every fixup, those made
-   between tickets included, and proves every commit green.
-2. The Review section, below, is filled in and folded into the memory commit the same way.
-3. The prompt histories land as the branch's last two commits, each holding its entry alone:
-   first `docs/prompts/0002-stage-1-planning.md`, the planning session's, written as that session
-   closed and untracked until now; then `docs/prompts/0003-stage-1-library-core.md`, the build
-   session's, written with the `prompt-history` skill.
-4. The branch stays as it is. Pushing, merging and replacing the records commit on `main` are the
-   person's to do.
+- `cargo tree --target all` and the first proptest download need the network, as `make deps`
+  already does.
+- A strategy that loses an edge passes its law forever. The 25 breaks guard against it: a break a
+  law no longer catches in three runs means the strategy lost its region, and the strategy is
+  fixed, not the law.
+- `Index::index` panics on an empty collection: every pick checks emptiness first and falls back
+  as today.
+- A shrinking law prints the panic message of each panicking attempt; the totality breaks' logs
+  are noisy, not wrong.
+- If proptest 1.12 gets a patch release, the lock is updated; a change to its graph needs a new
+  record.
 
 ## Review
 
-Closed on 2026-10-10, executed inline in one session. The library core of stage 1 is four commits
-on `feat/stage-1-core`, on top of the amended records commit:
+- **Two commits, not one.** The move was asked for as one new commit; the decision-record
+  convention commits a record alone, so the record landed first and this work is the one commit
+  after it, folded into nothing.
+- **The gate needed a fix the plan did not foresee.** In the recipe, `$members$(ADMITTED)`
+  expanded to `$membersarrayvec`, one unset name, so every crate looked unadmitted; `make -n deps`
+  showed it, and `${members}` fixed it. The two deliberate breaks of the gate prove both checks.
+- **The lints shaped names.** `shadow_unrelated` rejects a strategy bound under the name of the
+  value it draws, so strategies are bound as `any_*`.
+- **The reviews.** The commit gate's review found two should-fixes, both taken: choice types whose
+  fields only some cases read became sums (`Ordinary`, `Edge::RepeatedTx`'s client, `Shape`), and
+  the docs stopped implying that proptest catches a panic inside a strategy; it does not, and the
+  test then fails with no law, no counterexample and no saved seed. The final whole-branch review
+  found nothing critical or important. Its five minor points and the gate's seven nits were the
+  accuracy of docs and names in files this commit writes, and were all taken, though the
+  executing skill defers minors: each corrected a sentence that was not true.
+- **Equivalence.** All 29 stage 1 deliberate breaks of the 25 laws fail on proptest, re-run on the
+  code as committed. Both reviewers sampled 200,000 draws from each old generator and its strategy
+  and found the populations equal within sampling noise. Most counterexamples shrink to one to
+  four commands or rows; the cross-scale balance break ends at five moves, because proptest
+  shrinks a list one element at a time and a repeated move depends on the move before it.
+- **What it costs.** A clean test build takes 4.2 s instead of 2.4 s, and the 26 tests run in
+  0.36 s instead of 0.09 s.
+- **Deliberately not done.** No `proptest-derive` and no `proptest-state-machine`, which the record
+  rejects. No regression file is committed: no real failure was found. Strategies that run
+  production code, `row` parsing amounts and the store operations calling `evolve`, still do; the
+  docs now say a panic there is not caught.
 
-| Commit | Ticket | Laws | Tests after it |
-|---|---|---|---|
-| `feat(domain): parse amounts once into exact four-decimal money` | `tasks/stage-1-domain.md` | 4 | 4 |
-| `feat(core): decide and evolve ledger commands as a pure decider` | `tasks/stage-1-core.md` | 9 | 13 |
-| `feat(run): run commands in arrival order over the store ports` | `tasks/stage-1-run.md` | 8 | 21 |
-| `feat(memory): keep the ledger in memory stores held to the store laws` | `tasks/stage-1-memory.md` | 4, and the worked example | 26 |
-
-Every law failed once against its deliberate break, and each ticket's Law evidence holds the
-line. Every commit passed `make ci` and a code review of its staged diff before it landed.
-
-How the plan changed while it ran: first the scan's fixes, then rulings recorded in each ticket's
-Review.
-
-- During the first ticket, before its commit, a scan that compiled every ticket's code against
-  § Interfaces found four gaps, each fixed where it lay: the File map now names `Account::lock`;
-  the row builders are `pub(crate)`, and `rows` keeps the ids it draws in its own state; the
-  views' boundary API is in Risks; the memory ticket's Files list names the generators.
-- Domain: `make deps` reads the graph with every feature, as `make lint` builds it;
-  `amount_value` yields a named value; `Display for Amount` stays.
-- Core: an oracle law holds the client half of the Commands table, in place of the
-  locked-account law, which left unlocked accounts unchecked; one draw in two, a repeat comes
-  from the repeated row's own client, which reaches locked accounts.
-- Run: the source-error law also requires that nothing after the first error is read.
-- Memory: loads name the address just committed one time in two; the store laws meet clients `0`
-  and `u16::MAX`; the empty ledger is read.
-
-The final review of the whole branch found nothing critical and one important gap, fixed: the
-balance law's generator brought a balance back to zero only through an amount at the scale it
-was added at, so the law missed, in 10 runs of 10, a break that turns a zero reached across
-scales into `-0.0000`; the code itself prints `0.0000` there. The generator now also moves the
-whole balance back to zero, spelled without trailing zeros, and the law catches that break in 10
-of 10. The second Review focus item, which understated the store laws, is corrected here, and the
-planning session's prompt history lands in its own commit. The other eleven points the reviewer
-declined to judge stand, for these reasons:
-
-- `Account::total()`'s `None` is unreachable below the amount cap; how the CSV sink prints it is
-  the next stage's to decide.
-- `ClientId` and `TxId` have no reading back or `Display` until their first reader, the CSV sink,
-  as the plan defers `Display` for the rejection reasons.
-- A dispute row carrying an amount is untested until the CSV source exists, which must ignore the
-  amount.
-- Id parsing that accepts `+1`, `01` and `0x10` is a recorded cost of *Rows parsed into commands
-  at the boundary*.
-- `make deps` matches crates by name: a crate from another source would show in the manifest diff
-  that every review reads.
-- `HashMap` and `HashSet` in `memory.rs` are never iterated, so hash order never reaches output.
-- The memory `Reference` and the core `World` mirror the code they check: a key-value contract
-  leaves little else to write.
-- `rust_decimal` rounding past 7.9 × 10^24, and `{:.4}` dropping a fifth decimal, are
-  unreachable: below that bound every amount and balance has at most four decimals.
-- `mod core` at the test crate root shadows nothing written: no bare `core::` path appears, and
-  Risks records it.
-- `cargo tree --target all` needs the network; CI runs online, as Risks records.
-- `unique` keeps a dispute whose target row it dropped as a repeat: that row was a rejected repeat
-  in either order.
-
-The review's five minor findings are deferred.
-
-Deferred:
+Still deferred from stage 1, whose plan this file held:
 
 - The runtime opens an account through `open()` and never answers `Event::Opened`. Before an
   event log lands, decide whether a step yields it, so a replay reopens the clients named only by
@@ -640,9 +366,3 @@ Deferred:
   rename it or fold it into the table law.
 - `Account` offers `is_locked() -> bool` beside the crate-visible `lock() -> Lock`; one public
   reading, the enum, would do.
-- `CLAUDE.md` § Tests describes `support.rs` alone; the support tree now holds `generate.rs` and
-  `model.rs` too.
-- As the person asked during the build, the tests move onto `proptest` after stage 1. That needs
-  a record superseding *csv, serde and rust_decimal as dependencies*, whose set is exact, to admit
-  it and the crates it builds on as dev-dependencies, and `make deps` to admit them for dev
-  builds only, failing when one reaches the normal graph.

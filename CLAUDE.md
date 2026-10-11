@@ -37,7 +37,7 @@ cthulhu/
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   └── main.rs       the composition root
-│   └── tests/it/         the black-box test crate: laws, generators and the model
+│   └── tests/it/         the black-box test crate: laws, strategies and the model
 ├── docs/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
@@ -75,14 +75,15 @@ everything it builds is passed down as a value.
 
 ## Dependencies
 
-Standard library first. The admitted crates are `csv`, `serde` and `rust_decimal`, with the 13
-crates they build on, admitted by a decision record. Never add any other dependency — no
-`cargo add`, no new line in a manifest's dependency tables — without explicit approval from a
-person: propose it with the rationale and the alternatives considered, wait for sign-off, then
-record it as a decision record. `make deps` fails the gate when the build graph (`cargo tree`,
-every dependency kind, feature and target) holds a package that is neither a workspace member
-nor an admitted crate. It reads the graph, not `Cargo.lock`, which also lists optional crates
-that are never built. `cargo add` and `cargo install` ask for consent.
+Standard library first. The program's admitted crates are `csv`, `serde` and `rust_decimal`, with
+the 13 crates they build on; the tests' are `proptest`, with the 13 more it builds on; a decision
+record admits both sets. Never add any other dependency — no `cargo add`, no new line in a
+manifest's dependency tables — without explicit approval from a person: propose it with the
+rationale and the alternatives considered, wait for sign-off, then record it as a decision record.
+`make deps` fails the gate when the build graph (`cargo tree`, every dependency kind, feature and
+target) holds a package that is neither a workspace member nor an admitted crate, or when the
+program's graph holds a crate admitted for tests only. It reads the graph, not `Cargo.lock`, which
+also lists optional crates that are never built. `cargo add` and `cargo install` ask for consent.
 
 ## Build, test, run
 
@@ -162,7 +163,9 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
   under test.
 - Nothing in production code may exist only for testing.
 - Black-box tests live in `backend/tests/it` and see only the public API: one test crate,
-  `main.rs` plus modules that mirror `src`, and `support.rs` for helpers once one is needed.
+  `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
+  each law on `proptest`, the strategies in `support/generate.rs` and the naive model in
+  `support/model.rs`.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments
@@ -220,7 +223,7 @@ Skills live in `.claude/skills/<name>/SKILL.md`; the agent in `.claude/agents/co
 | `rust-errors` | Defining an error enum, classifying a foreign failure, deciding what retries, mapping a failure to an exit code |
 | `rust-resources` | Acquiring anything that must be released: files, sockets, child processes, threads, buffered writers |
 | `rust-wiring` | Changing `main.rs`: building adapters, parsing configuration, composing decorators, adding a module |
-| `rust-properties` | Writing a property test or a generator |
+| `rust-properties` | Writing a property test or a strategy |
 | `architecture-decisions` | Making, reversing or looking up an architecture decision; starting a record |
 | `review-and-planning` | Resolving review comments, reviewing a diff, planning a multi-step change, proposing a dependency, writing a test that must fail first |
 | `prompt-history` | Closing a working session: recording its prompts in `docs/prompts/` |

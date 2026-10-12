@@ -1,7 +1,8 @@
 //! Laws of the domain's money: any spelling of an amount reads as its value, text an amount refuses
-//! says why, and credits then a debit of their sum print zero at any scales.
+//! says why, and moves then their sum back print zero, from above or below, at any scales.
 
 use engine::domain::{Amount, AmountError, Balance};
+use proptest::arbitrary::any;
 use proptest::collection::vec;
 use proptest::prop_oneof;
 use proptest::sample::select;
@@ -48,23 +49,33 @@ fn balance(units: u64) -> Option<Balance> {
     format!("{}.{:04}", units / 10_000, units % 10_000).parse::<Amount>().ok().map(Balance::from)
 }
 
-/// The balance after crediting each of `units`, then debiting their sum; `None` when the sum
-/// overflows or an amount does not parse.
-fn credited_then_debited(units: &[u64]) -> Option<Balance> {
+/// `before` with `units` credited, or debited when `credit` is false; `None` when it overflows or
+/// the amount does not parse.
+fn moved(before: Balance, units: u64, credit: bool) -> Option<Balance> {
+    let amount = balance(units)?;
+    if credit { before.checked_add(amount) } else { before.checked_sub(amount) }
+}
+
+/// The balance after moving each of `units` one way, credits when `credits_first`, then their sum
+/// the other way; `None` when the sum overflows or an amount does not parse.
+fn there_and_back(units: &[u64], credits_first: bool) -> Option<Balance> {
     let total = units.iter().try_fold(0_u64, |sum, &unit| sum.checked_add(unit))?;
-    let credited =
-        units.iter().try_fold(Balance::ZERO, |sum, &unit| sum.checked_add(balance(unit)?))?;
-    credited.checked_sub(balance(total)?)
+    let away =
+        units.iter().try_fold(Balance::ZERO, |sum, &unit| moved(sum, unit, credits_first))?;
+    moved(away, total, !credits_first)
 }
 
 #[test]
-fn prop_credits_then_a_debit_of_their_sum_print_zero() {
+fn prop_moves_then_their_sum_back_print_zero() {
     let any_units =
         (1..=9_999_u64, 0..=4_u32).prop_map(|(digits, zeros)| digits * 10_u64.pow(zeros));
     let law = support::for_all(
-        "credits then one debit of their sum leave a balance that prints 0.0000, at any scales",
-        vec(any_units, 2..=4),
-        |units| credited_then_debited(units).is_some_and(|zero| zero.to_string() == "0.0000"),
+        "moves one way, then their sum the other way, leave a balance that prints 0.0000, from \
+         above or below, at any scales",
+        (vec(any_units, 2..=4), any::<bool>()),
+        |(units, credits_first)| {
+            there_and_back(units, *credits_first).is_some_and(|zero| zero.to_string() == "0.0000")
+        },
     );
     if let Err(failure) = law {
         panic!("{failure}");

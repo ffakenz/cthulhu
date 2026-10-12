@@ -1,47 +1,22 @@
-//! Laws of the domain's money: an amount's text parses back to it, a spelling outside the grammar
-//! is malformed, and credits then a debit of their sum print zero at any scales.
+//! Laws of the domain's money: any spelling of an amount reads as its value, text an amount refuses
+//! says why, and credits then a debit of their sum print zero at any scales.
 
 use engine::domain::{Amount, AmountError, Balance};
-use proptest::arbitrary::any;
 use proptest::collection::vec;
 use proptest::prop_oneof;
 use proptest::sample::select;
 use proptest::strategy::Strategy;
 
-use crate::support;
-
-/// The smallest whole part an amount cannot have: 10^15.
-const TOO_LARGE: u64 = 1_000_000_000_000_000;
-
-/// Whole parts at the edges: zero, one, the largest an amount may have, and the smallest it may
-/// not.
-const EDGE_WHOLES: [u64; 4] = [0, 1, TOO_LARGE - 1, TOO_LARGE];
+use crate::support::{self, input};
 
 #[test]
-fn prop_amount_text_parses_back_to_its_value() {
-    let wholes = prop_oneof![
-        1 => select(&EDGE_WHOLES),
-        3 => (any::<u64>(), 0..u64::BITS).prop_map(|(bits, shift)| bits >> shift),
-    ];
+fn prop_any_spelling_of_an_amount_reads_as_its_value() {
     let law = support::for_all(
-        "an amount's four-decimal text, padded or not, parses and prints back; only zero and 10^15 \
-         up are refused",
-        (wholes, 0..=9_999_u64),
-        |&(whole, fraction)| {
-            let text = format!("{whole}.{fraction:04}");
-            let parsed = text.parse::<Amount>();
-            let padded = format!("0{text}0").parse::<Amount>() == parsed;
-            padded
-                && match parsed {
-                    Ok(amount) => {
-                        whole < TOO_LARGE
-                            && (whole, fraction) != (0, 0)
-                            && amount.to_string() == text
-                    }
-                    Err(AmountError::Zero) => (whole, fraction) == (0, 0),
-                    Err(AmountError::TooLarge) => whole >= TOO_LARGE,
-                    Err(AmountError::Malformed | AmountError::TooPrecise) => false,
-                }
+        "any spelling of an amount parses, and prints its value with four decimals",
+        (input::any_money(), 0..=2_usize, 0..=2_usize),
+        |&(money, leading, trailing)| {
+            money.spelled(leading, trailing).parse::<Amount>().map(|amount| amount.to_string())
+                == Ok(money.text())
         },
     );
     if let Err(failure) = law {
@@ -49,15 +24,22 @@ fn prop_amount_text_parses_back_to_its_value() {
     }
 }
 
-/// Spellings outside the grammar: empty, signed, padded, an exponent, a point without digits on
-/// one side, two points, a separator, and digits that are not ASCII.
-const MALFORMED: [&str; 12] =
-    ["", "+1", "-1", " 1", "1 ", "1e2", ".5", "5.", "1.2.3", "1,5", "\u{663}", "1.\u{ff11}"];
+/// Text outside the grammar that no CSV field carries as it is: empty, padded, or with a comma.
+const UNFIELDED: [&str; 4] = ["", " 1", "1 ", "1,5"];
 
 #[test]
-fn a_spelling_outside_the_grammar_is_malformed() {
-    for text in MALFORMED {
-        assert_eq!(text.parse::<Amount>(), Err(AmountError::Malformed), "{text:?}");
+fn prop_text_an_amount_refuses_says_why() {
+    let any_refused = prop_oneof![
+        input::any_refused_amount(),
+        select(&UNFIELDED).prop_map(|text| (text.to_owned(), AmountError::Malformed)),
+    ];
+    let law = support::for_all(
+        "text outside the grammar or the limits is refused, with the reason",
+        any_refused,
+        |(text, why)| text.parse::<Amount>() == Err(*why),
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
     }
 }
 

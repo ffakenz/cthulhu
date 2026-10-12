@@ -91,6 +91,34 @@ The person signed off this plan as written.
 - `a_table_that_cannot_be_written_is_a_write_failure`: one deposit, and 300 clients, on an
   unwritable stdout give status 5 and the sink's message.
 
+## Deviation: the person's request, after task 2
+
+The person asked for one generator per field, composed into a line, and for success and failure
+never to be checked in the same property. The generators live in `support/input.rs`:
+- **Valid fields:** type, client, tx and amount. Each draws its value from the whole domain,
+  edges weighted, and its spelling from every form the Input section of the overview admits; ids
+  also take the forms *Rows parsed into commands at the boundary* records.
+- **A valid line** composes the fields. **A file layout** composes the columns in any order, an
+  extra column, a byte-order mark, line ends and blank lines.
+- **Flaws:** a type that names no command, an id outside its type, each reason an amount is
+  refused, an extra field, a short line, a byte that is not UTF-8. **A malformed line** composes a
+  valid line with one flaw, and the flaw names the kind the line is counted as.
+
+The success properties run on valid lines only:
+- client independence;
+- the equations, without pair 15;
+- `prop_any_spelling_reads_as_the_canonical_one`;
+- `prop_any_spelling_of_an_amount_reads_as_its_value`;
+- the balance law.
+
+The failure properties run on malformed input only:
+- `prop_a_malformed_line_changes_nothing_but_its_count`, which takes over pair 15;
+- `prop_text_an_amount_refuses_says_why`;
+- the source-error example.
+
+The spelling example and the malformed-spelling example go. Task 3's breaks are run against this
+suite.
+
 ## Tasks
 
 - [x] **0.** The worktree and the branch; the archive and the link; this plan. Commit

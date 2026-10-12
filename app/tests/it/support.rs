@@ -1,6 +1,8 @@
 //! Property-test support: a runner that checks a law on the inputs a strategy draws, and reports
-//! the smallest input it found that breaks the law; and `run` over CSV text and fresh in-memory
-//! stores.
+//! the smallest input it found that breaks the law; `run` over CSV text and fresh in-memory stores;
+//! and the generators of the input in `input`.
+
+pub(crate) mod input;
 
 use std::convert::Infallible;
 use std::fmt;

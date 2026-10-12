@@ -1,49 +1,23 @@
-//! The runtime through the CSV source, over fresh in-memory stores, held to equations between its
-//! runs: clients run independently, and suffixes the rules make equivalent leave the same
-//! accounts after any rows. A source error stops the run, and the input as the overview spells it
-//! reads as its plainest spelling.
+//! The runtime through the CSV source, over fresh in-memory stores. On valid lines, clients run
+//! independently, suffixes the rules make equivalent leave the same accounts after any lines, and
+//! any spelling reads as the canonical one. A malformed line changes nothing but its count, and a
+//! source error stops the run.
 
+use std::collections::BTreeMap;
 use std::io::{self, Read};
 use std::iter;
 
 use app::csv_io::CsvSource;
-use engine::run::{Row, RowError, RunError, SourceError, run};
+use engine::run::{Row, RowError, RunError, SourceError, Summary, run};
 use proptest::collection::vec;
-use proptest::sample::select;
 use proptest::strategy::Strategy;
 use store::memory::{MemoryLedger, MemorySeenIds};
 
-use crate::support;
+use crate::support::{self, input};
 
-/// The types a line may name.
-const KINDS: [&str; 5] = ["deposit", "withdrawal", "dispute", "resolve", "chargeback"];
-
-/// Amounts at mixed scales: the smallest, a whole one, one with a single decimal, two that differ
-/// only in their fourth decimal, and the largest an amount may be.
-const AMOUNTS: [&str; 6] = ["0.0001", "1", "2.5", "711.6569", "711.657", "999999999999999.9999"];
-
-/// A line of CSV input: its type, client, tx id and amount.
-#[derive(Debug, Clone, Copy)]
-struct Line {
-    kind: &'static str,
-    client: u16,
-    tx: u32,
-    amount: &'static str,
-}
-
-/// Up to sixteen lines of any type, by clients 1 to 3, on tx ids below 8, for amounts from
-/// `AMOUNTS`.
-fn lines() -> impl Strategy<Value = Vec<Line>> {
-    let line = (select(&KINDS), 1..=3_u16, 0..8_u32, select(&AMOUNTS))
-        .prop_map(|(kind, client, tx, amount)| Line { kind, client, tx, amount });
-    vec(line, 0..=16)
-}
-
-/// `lines` as CSV text, under the header `type,client,tx,amount`.
-fn text(lines: &[Line]) -> String {
-    lines.iter().fold(String::from("type,client,tx,amount\n"), |csv, line| {
-        csv + &format!("{},{},{},{}\n", line.kind, line.client, line.tx, line.amount)
-    })
+/// Up to sixteen valid lines, by clients 1 to 3 on tx ids below 8, so that their ids collide.
+fn lines() -> impl Strategy<Value = Vec<input::Line>> {
+    vec(input::any_line(1..=3_u16, 0..8_u32), 0..=16)
 }
 
 #[test]
@@ -52,18 +26,21 @@ fn prop_clients_run_independently() {
         "lines of different clients give the same summary in any order, given distinct tx ids",
         lines(),
         |drawn| {
-            let distinct: Vec<Line> = drawn
+            let distinct: Vec<input::Line> = drawn
                 .iter()
                 .zip(0_u32..)
-                .map(|(&line, position)| match line.kind {
-                    "deposit" | "withdrawal" => Line { tx: position, ..line },
-                    _ => line,
+                .map(|(&line, position)| {
+                    if input::moves_money(line.kind) {
+                        input::Line { tx: position, ..line }
+                    } else {
+                        line
+                    }
                 })
                 .collect();
             let mut by_client = distinct.clone();
             by_client.sort_by_key(|line| line.client);
-            support::summary(text(&distinct).as_bytes())
-                == support::summary(text(&by_client).as_bytes())
+            support::summary(input::canonical(&distinct).as_bytes())
+                == support::summary(input::canonical(&by_client).as_bytes())
         },
     );
     if let Err(failure) = law {
@@ -74,7 +51,7 @@ fn prop_clients_run_independently() {
 /// Pairs of suffixes that leave the same accounts after any lines, each under the rule it pins:
 /// `c` is the drawn client, `o` another and `F` one no line names; `a` and `b` are the drawn
 /// amounts; `X`, `Y` and `Z` are tx ids no line names.
-fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
+fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 14] {
     const F: u16 = 9;
     const X: u32 = 100;
     const Y: u32 = 101;
@@ -122,8 +99,6 @@ fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
         (format!("{fresh}withdrawal,{F},{Y},{a}\n"), format!("dispute,{F},{Z}\n")),
         // Held funds cannot be withdrawn.
         (format!("{fresh_held}withdrawal,{F},{Y},{a}\n"), fresh_held),
-        // A malformed row opens no account and spends no tx id.
-        (format!("deposit,{F},{X},0\n{deposit}"), deposit),
     ]
 }
 
@@ -131,17 +106,70 @@ fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
 fn prop_equivalent_commands_leave_the_same_accounts() {
     let law = support::for_all(
         "each pair of equivalent suffixes leaves the same accounts after any lines",
-        (lines(), 1..=3_u16, select(&AMOUNTS), select(&AMOUNTS)),
+        (lines(), 1..=3_u16, input::any_money(), input::any_money()),
         |(drawn, client, first, second)| {
-            let prefix = text(drawn);
+            let prefix = input::canonical(drawn);
             let accounts = |suffix: &str| {
                 support::summary(format!("{prefix}{suffix}").as_bytes())
                     .map(|summary| summary.accounts)
             };
-            for (left, right) in pairs(*client, first, second) {
+            for (left, right) in pairs(*client, &first.text(), &second.text()) {
                 assert_eq!(accounts(&left), accounts(&right), "{left:?} and {right:?} differ");
             }
             true
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+#[test]
+fn prop_any_spelling_reads_as_the_canonical_one() {
+    let any_line = input::any_line(input::any_client(), input::any_tx());
+    let law = support::for_all(
+        "any spelling of valid lines reads as their canonical spelling",
+        (vec((any_line, input::any_spelling()), 0..=8), input::any_layout()),
+        |(spelled, layout)| {
+            let lines: Vec<input::Line> = spelled.iter().map(|&(line, _)| line).collect();
+            support::summary(input::spelled(spelled, layout).as_bytes())
+                == support::summary(input::canonical(&lines).as_bytes())
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+/// Each kind of malformed line, with how many lines of it `summary` counts.
+fn malformed(summary: &Summary) -> BTreeMap<RowError, u64> {
+    summary.report.malformed().map(|(kind, count)| (kind, count.get())).collect()
+}
+
+#[test]
+fn prop_a_malformed_line_changes_nothing_but_its_count() {
+    let law = support::for_all(
+        "a malformed line among valid ones changes no account and no rejection, and counts once as \
+         its kind",
+        (lines(), input::any_malformed(1..=3_u16, 0..8_u32), lines()),
+        |(before, (line, flaw), after)| {
+            let valid = [before.as_slice(), after.as_slice()].concat();
+            let flawed = [
+                input::canonical(before).into_bytes(),
+                input::malformed(*line, flaw),
+                input::rows(after).into_bytes(),
+            ]
+            .concat();
+            let (Ok(with), Ok(without)) =
+                (support::summary(&flawed), support::summary(input::canonical(&valid).as_bytes()))
+            else {
+                return false;
+            };
+            let mut counted = malformed(&without);
+            *counted.entry(flaw.kind()).or_insert(0) += 1;
+            with.accounts == without.accounts
+                && with.report.rejected().eq(without.report.rejected())
+                && malformed(&with) == counted
         },
     );
     if let Err(failure) = law {
@@ -169,33 +197,4 @@ fn a_source_error_stops_the_run_before_the_next_row_is_read() {
     let outcome = run(source, &mut MemoryLedger::default(), &mut MemorySeenIds::default());
     assert_eq!(outcome, Err(RunError::Source(SourceError::Unreadable)));
     assert_eq!(pulled, 1);
-}
-
-/// Lines in the plainest spelling: a deposit, a withdrawal, a dispute, a malformed line and a
-/// resolve, all by client 1.
-const PLAIN: &[u8] = b"\
-type,client,tx,amount
-deposit,1,1,2.5
-withdrawal,1,2,1
-dispute,1,1,
-Deposit,1,3,1
-resolve,1,1,
-";
-
-/// The same lines as the overview allows them: a byte-order mark; the columns in another order,
-/// padded, with one no line needs; CRLF line ends and a blank line; a padded field, a quoted one
-/// and a client spelled `0x1`; a dispute that stops before its amount; a line that is not UTF-8;
-/// and a resolve that carries an amount.
-const RESPELLED: &[u8] = b"\xEF\xBB\xBFtx , type,note, client ,amount\r\n\
-    \r\n\
-    1,deposit , x,0x1,\"2.5\"\r\n\
-    \x202, withdrawal,,1,1\r\n\
-    1,dispute,,1\r\n\
-    3,\xFF,,1,1\r\n\
-    1,resolve,,1,9\r\n";
-
-#[test]
-fn the_input_as_the_overview_spells_it_reads_as_its_plainest_spelling() {
-    let plain = support::summary(PLAIN).expect("the plainest spelling runs");
-    assert_eq!(support::summary(RESPELLED), Ok(plain));
 }

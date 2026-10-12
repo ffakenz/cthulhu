@@ -120,13 +120,13 @@ does not build.
 
 | Module | Package | Holds | Uses |
 |---|---|---|---|
-| `domain` | `engine` | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` | `rust_decimal` |
-| `core` | `engine` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
-| `run` | `engine` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
+| `domain` | `engine` | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` | `rust_decimal`, `thiserror` |
+| `core` | `engine` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `thiserror`, `domain` |
+| `run` | `engine` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `thiserror`, `domain`, `core` |
 | `memory` | `store` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
-| `csv_io` | `backend` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `domain`, `run` |
+| `csv_io` | `backend` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `thiserror`, `domain`, `run` |
 | `text_io` | `backend` | `render_report` | `domain`, `run` |
-| `main.rs` | `backend` | the argument, the input file, stdio, `ExitCode` | `csv_io`, `text_io`, `memory`, `run` |
+| `main.rs` | `backend` | the argument, the input file, stdio, `ExitCode` | `thiserror`, `csv_io`, `text_io`, `memory`, `run` |
 
 - `domain` is the model in the records' terms: values, entities and messages, each entity reached
   by its key (*A domain model in the records' language*, *Entities identified by their keys*).

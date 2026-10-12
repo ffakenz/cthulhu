@@ -137,13 +137,28 @@ The person signed off this plan as written.
     skill's sketch no longer places a library that names an adapter's error in `engine`; two
     lines back within 100 columns; this tick; and the renamed-copy test's red.
   - Commit `refactor(workspace): split the library into engine, store and backend packages`.
-- [ ] **3.** `thiserror`, a refactor.
+- [x] **3.** `thiserror`, a refactor.
   - `thiserror = "2.0.21"` in `engine` and `backend`; the derives and their `#[error]` attributes,
     transcribed byte for byte; the hand-written impls, and the imports only they used, removed.
     `ADMITTED` gains `thiserror` and `thiserror-impl`, and `CLAUDE.md` § Dependencies,
     `README.md`, `docs/architecture.md` and the `rust-errors` skill follow.
   - Evidence that the messages are equal: a throwaway test, never committed, prints every public
     error value's `to_string()` before and after, and the two outputs are identical.
+    - Run: 20 values, from `Overflow`, `AmountError`, `RowError`, `SourceError`, `RunError` over
+      `AmountError`, and `SinkError`, print the same message before and after, each with no
+      `source()`. `Failure` is private to `main.rs`: the reviewer compared its expansion with the
+      deleted impl, and `cli.rs` pins its messages.
+    - `cargo update --workspace` added only `thiserror` and `thiserror-impl` 2.0.21, and one `syn`
+      stays in the graph. `make deps` passes, the program's graph holding the 18 admitted crates.
+    - `make ci` green: 39 passed and 1 ignored.
+  - The test crate's own `Failure`, in `support.rs`, keeps its hand-written `Display`: it is a
+    test helper, not one of the program's seven error types.
+  - The code-reviewer found no blocker. Its two should-fixes are taken: the `rust-errors` rule
+    also bans an `#[error]` on the enum itself, which thiserror copies to every variant that has
+    none, and the skill's own example derives its messages. Its nits are taken too: the derive is
+    spelled `thiserror::Error`, with no bare `Error` beside `io::Error`; the skill gains keywords
+    and a grep; the Uses cells list crates first; and this tick. The module box stays a picture of
+    the format and decimal crates.
   - Commit `refactor(errors): derive Display and Error with thiserror`.
 - [ ] **4, red.** In `backend/tests/it/cli.rs`, `a_wrong_argument_count_is_a_usage_error`, which
       pins today's one-line usage, is rewritten to clap's messages for no argument, for two and

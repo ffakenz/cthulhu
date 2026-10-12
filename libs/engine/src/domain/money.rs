@@ -1,6 +1,5 @@
 //! Money: amounts parsed once from text, and balances changed only by checked arithmetic.
 
-use std::error;
 use std::fmt;
 use std::str::FromStr;
 
@@ -13,16 +12,20 @@ pub struct Amount(Decimal);
 
 /// An amount refusal: why text is not an amount. The variants are checked in order, and the first
 /// that applies names the refusal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
 pub enum AmountError {
     /// Not digits with an optional fraction: empty, signed, an exponent, a separator, padding, a
     /// non-ASCII digit, or a point without digits on both sides.
+    #[error("not digits with an optional fraction")]
     Malformed,
     /// More than four decimal places once trailing zeros are dropped.
+    #[error("more than four decimal places")]
     TooPrecise,
     /// 10^15 or more.
+    #[error("10^15 or more")]
     TooLarge,
     /// Zero.
+    #[error("zero")]
     Zero,
 }
 
@@ -75,20 +78,6 @@ impl fmt::Display for Amount {
         write!(f, "{:.*}", PLACES, self.0)
     }
 }
-
-impl fmt::Display for AmountError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let reason = match self {
-            Self::Malformed => "not digits with an optional fraction",
-            Self::TooPrecise => "more than four decimal places",
-            Self::TooLarge => "10^15 or more",
-            Self::Zero => "zero",
-        };
-        f.write_str(reason)
-    }
-}
-
-impl error::Error for AmountError {}
 
 /// A signed amount of money: an account's available, held or total funds. Exact at four decimal
 /// places below 7.9 × 10^24; past that bound, addition and subtraction round.

@@ -1,8 +1,6 @@
 //! The CSV adapters: `CsvSource` reads rows from CSV text into commands, and `render_csv` writes
 //! the accounts table as CSV.
 
-use std::error;
-use std::fmt;
 use std::io::{Read, Write};
 use std::mem;
 
@@ -168,24 +166,15 @@ fn spoiled(error: &csv::Error) -> Spoiled {
 }
 
 /// Why the accounts table could not be written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SinkError {
     /// Writing the output failed.
+    #[error("the output cannot be written")]
     Unwritable,
     /// The client's total, available plus held, overflows the decimal type.
+    #[error("the total of client {0} overflows")]
     Overflow(ClientId),
 }
-
-impl fmt::Display for SinkError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unwritable => f.write_str("the output cannot be written"),
-            Self::Overflow(client) => write!(f, "the total of client {client} overflows"),
-        }
-    }
-}
-
-impl error::Error for SinkError {}
 
 /// Writes `accounts` to `out` as CSV and flushes it: the header
 /// `client,available,held,total,locked`, then a line per account by client id, each balance with

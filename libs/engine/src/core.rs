@@ -2,25 +2,15 @@
 //! next footprint from an accepted event. Pure and total; the initial state is `None`, a client
 //! with no account.
 
-use std::error;
-use std::fmt;
-
 use crate::domain::{
     Account, Amount, Balance, ClientCommand, ClientEvent, ClientReason, Deposit, DisputeCommand,
     DisputeEvent, DisputeReason, Event, Footprint, Lock, Sight, Status,
 };
 
 /// A balance would leave the range the decimal type holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("a balance overflowed")]
 pub struct Overflow;
-
-impl fmt::Display for Overflow {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("a balance overflowed")
-    }
-}
-
-impl error::Error for Overflow {}
 
 /// The footprint `Opened` makes: zero balances, unlocked, no deposit.
 pub fn open() -> Footprint {

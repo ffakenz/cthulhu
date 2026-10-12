@@ -24,7 +24,7 @@ test: ## Run every test
 
 # The crates the decision records admit for the program, besides the workspace's own packages.
 ADMITTED := arrayvec autocfg csv csv-core itoa memchr num-traits proc-macro2 quote rust_decimal \
-    ryu serde serde_core serde_derive syn unicode-ident
+    ryu serde serde_core serde_derive syn thiserror thiserror-impl unicode-ident
 
 # The crates the decision records admit for tests only: never in the program's build graph.
 ADMITTED_DEV := bitflags cfg-if chacha20 core_detect cpufeatures getrandom libc proptest r-efi \

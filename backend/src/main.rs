@@ -4,7 +4,6 @@
 
 use std::convert::Infallible;
 use std::ffi::OsString;
-use std::fmt;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -56,17 +55,22 @@ fn input(arguments: impl IntoIterator<Item = OsString>) -> Option<PathBuf> {
 }
 
 /// Why the program failed, by the step that failed.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 enum Failure {
     /// Not exactly one argument.
+    #[error("usage: cthulhu <input.csv>")]
     Usage,
     /// The input could not be opened.
+    #[error("error: cannot open {}: {error}", .path.display())]
     Open { path: PathBuf, error: io::Error },
     /// The run stopped.
+    #[error("error: {0}")]
     Run(RunError<Infallible, Infallible>),
     /// The accounts table could not be written.
+    #[error("error: {0}")]
     Table(SinkError),
     /// The report could not be written.
+    #[error("error: cannot write the report: {0}")]
     Report(io::Error),
 }
 
@@ -79,19 +83,5 @@ impl Failure {
             Self::Run(_) => 4,
             Self::Table(_) | Self::Report(_) => 5,
         })
-    }
-}
-
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Usage => f.write_str("usage: cthulhu <input.csv>"),
-            Self::Open { path, error } => {
-                write!(f, "error: cannot open {}: {error}", path.display())
-            }
-            Self::Run(error) => write!(f, "error: {error}"),
-            Self::Table(error) => write!(f, "error: {error}"),
-            Self::Report(error) => write!(f, "error: cannot write the report: {error}"),
-        }
     }
 }

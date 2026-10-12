@@ -1,9 +1,6 @@
 //! What a source yields, and how a run fails: a malformed row is skipped and counted; a source or
 //! store failure stops the run.
 
-use std::error;
-use std::fmt;
-
 use crate::domain::{AmountError, Command};
 
 /// A row as a source delivers it: the command it reads as, or why it is malformed.
@@ -16,72 +13,45 @@ pub enum Row {
 }
 
 /// Why a row is malformed: its kind, by which it is counted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
 pub enum RowError {
     /// A field does not read: a byte that is not UTF-8, an unknown type, a client or tx id that is
     /// missing or is not a `u16` or a `u32`, a column other than `amount` that the row stops
     /// before, or `type`, `client`, `tx` or `amount` named twice in the header.
+    #[error("a field does not read")]
     Unreadable,
     /// More fields than the header names.
+    #[error("more fields than the header")]
     TooManyFields,
     /// A deposit or a withdrawal without an amount.
+    #[error("no amount")]
     MissingAmount,
     /// A deposit or a withdrawal whose amount is refused, and why.
+    #[error("invalid amount: {0}")]
     InvalidAmount(AmountError),
 }
 
-impl fmt::Display for RowError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unreadable => f.write_str("a field does not read"),
-            Self::TooManyFields => f.write_str("more fields than the header"),
-            Self::MissingAmount => f.write_str("no amount"),
-            Self::InvalidAmount(refusal) => write!(f, "invalid amount: {refusal}"),
-        }
-    }
-}
-
-impl error::Error for RowError {}
-
 /// Why a source stops a run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SourceError {
     /// Reading the input failed.
+    #[error("the input cannot be read")]
     Unreadable,
     /// The header lacks `type`, `client` or `tx`.
+    #[error("the header lacks type, client or tx")]
     IncompleteHeader,
 }
 
-impl fmt::Display for SourceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unreadable => f.write_str("the input cannot be read"),
-            Self::IncompleteHeader => f.write_str("the header lacks type, client or tx"),
-        }
-    }
-}
-
-impl error::Error for SourceError {}
-
 /// Why a run stopped with no summary: its source failed, or one of its stores did.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RunError<L, S> {
     /// The source stopped.
+    #[error("{0}")]
     Source(SourceError),
     /// The ledger store failed.
+    #[error("the ledger store failed: {0}")]
     Ledger(L),
     /// The tx-id store failed.
+    #[error("the tx-id store failed: {0}")]
     Seen(S),
 }
-
-impl<L: fmt::Display, S: fmt::Display> fmt::Display for RunError<L, S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Source(error) => write!(f, "{error}"),
-            Self::Ledger(error) => write!(f, "the ledger store failed: {error}"),
-            Self::Seen(error) => write!(f, "the tx-id store failed: {error}"),
-        }
-    }
-}
-
-impl<L: error::Error, S: error::Error> error::Error for RunError<L, S> {}

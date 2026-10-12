@@ -21,8 +21,8 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; for tests
-only, `proptest`, with the 13 more it builds on. All of them are in use.
+Admitted crates: `csv`, `serde`, `rust_decimal` and `thiserror`, with the 14 crates they build on;
+for tests only, `proptest`, with the 13 more it builds on. All of them are in use.
 
 ## Usage
 

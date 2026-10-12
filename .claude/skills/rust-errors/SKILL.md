@@ -1,6 +1,6 @@
 ---
 name: rust-errors
-description: "Use when Rust code defines an error type, converts a std or foreign error, decides whether a failure is retryable, or maps a failure to an exit code. Covers one closed enum per boundary, a single conversion point, total classifiers, the one sanctioned catch-all for non-exhaustive enums, dispositions computed then interpreted, and the lints that ban panicking shortcuts. Keywords: Result, Error, Display, From, ?, map_err, io::Error, io::ErrorKind, non_exhaustive, wildcard_enum_match_arm, Box<dyn Error>, unwrap, expect, panic, retry, should_retry, can_retry, code, disposition, ExitCode, let_underscore_must_use."
+description: "Use when Rust code defines an error type, converts a std or foreign error, decides whether a failure is retryable, or maps a failure to an exit code. Covers one closed enum per boundary, a single conversion point, total classifiers, the one sanctioned catch-all for non-exhaustive enums, dispositions computed then interpreted, and the lints that ban panicking shortcuts. Keywords: Result, Error, Display, From, ?, thiserror, #[error], #[from], #[source], transparent, map_err, io::Error, io::ErrorKind, non_exhaustive, wildcard_enum_match_arm, Box<dyn Error>, unwrap, expect, panic, retry, should_retry, can_retry, code, disposition, ExitCode, let_underscore_must_use."
 ---
 
 # Errors in Rust
@@ -16,6 +16,7 @@ Suppose an adapter that reads orders from a `TcpStream` routed failed reads with
 ## The rules that follow
 
 - **One closed enum per dependency.** The journal's is `JournalError`: a variant per failure mode, `Display`, and `std::error::Error`. Another dependency gets its own enum, because a shared variant ends as a guess about who failed.
+- **Derive the message, not the conversion.** `#[derive(thiserror::Error)]` writes `Display` and `Error` from an `#[error("…")]` on each variant. Never `#[from]`, `#[source]`, `#[error(transparent)]` or a field named `source`, so no error type converts into another and `source()` stays `None`; and never an `#[error(…)]` on the enum itself, which thiserror copies to every variant that has none, so a variant without its own message does not compile.
 - **One conversion point.** `impl From<io::Error> for JournalError` lives in the journal's adapter module; only adapter modules name `io::ErrorKind`. The journal's methods, and the port traits it implements (`OrderReader`, `OrderWriter`), return `JournalError`, never `io::Error`.
 - **The one catch-all.** `io::ErrorKind` is `#[non_exhaustive]` (so is `num::IntErrorKind`, met when parsing `Config`), so its match needs a `_`; that arm builds `Unknown` from `raw_os_error()` and carries no `io` type. Its `#[expect(clippy::wildcard_enum_match_arm, reason = "…")]` sits on `fn from` — on the arm itself the lint does not see it — and is the one sanctioned wildcard per boundary. Our own enums are never `#[non_exhaustive]`, so every other match names every variant.
 - **Total classifiers.** `const fn can_retry(&self) -> bool` and `const fn code(&self) -> &'static str` match every variant, so a new variant does not compile until it is classified. A metric label, a log field or the code `main` reports comes from `code()`, never from `to_string()`: `Display` is prose and may change.
@@ -23,13 +24,16 @@ Suppose an adapter that reads orders from a `TcpStream` routed failed reads with
 - **Compute the disposition, then interpret it.** `disposition(&RunError, attempt, max_attempts) -> Disposition` is pure, its retry budget pinned by `main` ([[rust-wiring]]), and one interpreter acts on its answer: `Retry(delay)` when the next attempt may succeed, `Park` to set the order aside with its error for a person, `Abort` when no later attempt can.
 
 ```rust
-use std::{error, fmt, io, time::Duration};
+use std::{io, time::Duration};
 
 /// Every way the journal can fail, as the code above its adapter sees it.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum JournalError {
+    #[error("the journal did not answer in time")]
     TimedOut,
+    #[error("the journal has no space left")]
     Full,
+    #[error("the journal failed for an unclassified reason")]
     Unknown { os_code: Option<i32> },
 }
 
@@ -62,18 +66,6 @@ impl JournalError {
         }
     }
 }
-
-impl fmt::Display for JournalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::TimedOut => "the journal did not answer in time",
-            Self::Full => "the journal has no space left",
-            Self::Unknown { .. } => "the journal failed for an unclassified reason",
-        })
-    }
-}
-
-impl error::Error for JournalError {}
 
 /// Every missing or malformed setting, reported together.
 #[derive(Debug)]
@@ -134,9 +126,10 @@ assert_eq!(disposition(&RunError::Config(ConfigErrors(Vec::new())), 1, 5), Dispo
 ## Verify
 
 ```sh
-make lint                                         # the partiality lints and wildcard_enum_match_arm
-git grep -nw 'ErrorKind' backend/src              # lists adapter modules only
-git grep -nE 'Box<dyn [a-z:]*Error' backend/src   # lists main.rs only
+make lint                                              # the partiality lints and wildcard_enum_match_arm
+git grep -nw 'ErrorKind' app/src libs                  # lists adapter modules only
+git grep -nE 'Box<dyn [a-z:]*Error' app/src libs       # lists main.rs only
+git grep -nE '#\[(from|source)\]|transparent|\bsource:' -- app/src libs       # lists nothing
 ```
 
 Related: [[functional-architecture]] · [[rust-effects]] · [[rust-wiring]] · [[rust-resources]]

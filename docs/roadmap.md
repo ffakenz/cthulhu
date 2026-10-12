@@ -7,7 +7,7 @@ async runtime or a disk store, needs its own decision record first.
 
 ## Benchmarks
 
-- Inputs: a seeded benchmark generator under `backend/examples/`, so the package keeps one
+- Inputs: a seeded benchmark generator under `app/examples/`, so the workspace keeps one
   binary for `cargo run`. It writes 1M, 10M and 100M rows: 50% deposits, 35% withdrawals,
   8% disputes, 4% resolves, 3% chargebacks; clients across the `u16` range; padded and unpadded
   fields.

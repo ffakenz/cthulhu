@@ -12,7 +12,7 @@ commits are kept on `origin/feat/stage-1-cli`, and CI passed on Linux with 39 te
 `feat/sample-input` holds three commits before this entry:
 - the command line's plan kept as
   [tasks/stage-1-cli-plan.md](../../tasks/stage-1-cli-plan.md), and the sample's plan in
-  [tasks/todo.md](../../tasks/todo.md);
+  [tasks/sample-input-plan.md](../../tasks/sample-input-plan.md);
 - a fixture pinning the sample's table and report, red;
 - [transactions.csv](../../transactions.csv), with the README's commands run on it, green, and a
   lesson in [tasks/lessons.md](../../tasks/lessons.md) on a plan condition rewritten instead of

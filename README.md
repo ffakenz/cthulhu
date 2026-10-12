@@ -7,7 +7,7 @@ values — are enforced by the compiler, the lint gate and review.
 
 ## Status
 
-The library and the command line are built: the domain model, the core, the sequential runtime,
+The libraries and the command line are built: the domain model, the core, the sequential runtime,
 the in-memory stores and the CSV adapters, each held to its laws, and the report's text adapter,
 held to the binary's fixtures. The `cthulhu` binary turns an input file into the accounts table.
 The benchmarks are next.
@@ -21,8 +21,9 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; for tests
-only, `proptest`, with the 13 more it builds on. All of them are in use.
+Admitted crates: `csv`, `serde`, `rust_decimal`, `thiserror` and `clap`, with the 19 crates they
+build on; for the dev targets only, `proptest` and `rand`, with the 12 more they build on. All of
+them are in use, `rand` so far only through `proptest`.
 
 ## Usage
 
@@ -34,8 +35,9 @@ make ci                                       # the commit gate: deps, fmt-check
 make run INPUT=transactions.csv > output.csv  # the accounts table for the sample input
 ```
 
-`make run` passes `INPUT` to the binary as one argument, with no shell expansion. By default, zsh
-does not expand a `~` after `=` either, so under zsh write `INPUT=$HOME/…`, not `INPUT=~/…`.
+`make run` passes `INPUT` to the binary as the input's path, after `--`, with no shell expansion, so
+a path that begins with `-` runs too. By default, zsh does not expand a `~` after `=` either, so
+under zsh write `INPUT=$HOME/…`, not `INPUT=~/…`.
 
 The engine runs as:
 
@@ -45,17 +47,20 @@ cargo run -- transactions.csv > output.csv
 
 `transactions.csv`, at the repository root, is a sample input: four clients, every command, a
 chargeback that leaves an account negative and locked, a dispute still open, and five refused
-commands, which the report counts on stderr. A fixture in `backend/tests/it/cli.rs` pins its
+commands, which the report counts on stderr. A fixture in `app/tests/it/cli.rs` pins its
 table and report, so `make ci` fails when the file changes and that fixture does not.
 
 The accounts table goes to stdout, written only once the run succeeds. The counts of rejected
-commands and malformed rows go to stderr, one line each. The exit status of `cthulhu`, which
-`cargo run` passes on, is `0` on success, `2` for not exactly one argument, `3` when the input
-cannot be opened, `4` when it cannot be read or its header lacks `type`, `client` or `tx`, and `5`
-when the table or the report cannot be written; `make run` names it in its `Error` line.
+commands and malformed rows go to stderr, one line each. `--help` (`-h`) and `--version` (`-V`)
+write the help and the version to stdout instead, and a path that begins with `-` goes after `--`.
+The exit status of `cthulhu`, which `cargo run` passes on, is `0` on success, `2` for a usage
+error (no path, a second one, an empty one or an unknown flag), `3` when the input cannot be
+opened, `4` when it cannot be read or its header lacks `type`, `client` or `tx`, and `5` when the
+table, the report, the help or the version cannot be written; `make run` names it in its `Error`
+line.
 
-The design record *The command-line contract* fixes the argument, the streams and the exit
-status; [docs/overview.md](docs/overview.md) gives the formats and rules.
+The design record *The command-line contract with help and version* fixes the arguments, the
+streams and the exit status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 
 ## Design
 
@@ -70,19 +75,26 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 
 ```text
 .
-├── backend/              the crate: the library and the `cthulhu` binary
+├── app/                  package `app`: the adapters and the `cthulhu` binary
 │   ├── src/
-│   │   ├── lib.rs        the library: core, runtime and adapters
-│   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── lib.rs        the library: the CSV and text adapters
 │   │   ├── csv_io.rs     the CSV adapters
-│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
-│   │   ├── domain/       ids, money, accounts and deposits, commands and events
-│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
-│   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
-│   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, strategies and the model
+├── libs/
+│   ├── engine/           package `engine`: the domain, the decider and the runtime
+│   │   └── src/
+│   │       ├── lib.rs    the library: the functional core
+│   │       ├── core.rs   the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │       ├── domain.rs the domain model: re-exports every type of `domain/`
+│   │       ├── domain/   ids, money, accounts and deposits, commands and events
+│   │       ├── run.rs    the runtime: `run`; re-exports every type of `run/`
+│   │       └── run/      the store ports, rows and run errors, the summary views
+│   └── store/            package `store`: the stores behind the engine's ports
+│       └── src/
+│           ├── lib.rs    the library: the stores
+│           └── memory.rs the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 ├── docs/
 │   ├── overview.md       what the engine does
 │   ├── architecture.md   a picture of the architecture decisions

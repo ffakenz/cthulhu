@@ -18,3 +18,4 @@ index and those status lines carry a number.
 - [5. A per-deposit dispute lifecycle](0005-a-per-deposit-dispute-lifecycle.md)
 - [6. Client commands refused on locked accounts](0006-client-commands-refused-on-locked-accounts.md)
 - [7. The command-line contract](0007-the-command-line-contract.md)
+- [8. The command-line contract with help and version](0008-the-command-line-contract-with-help-and-version.md)

@@ -87,22 +87,26 @@ Dispute commands apply on locked accounts too. An arithmetic overflow would reje
 
 ## Output
 
-*The command-line contract*.
+*The command-line contract with help and version*.
 
+- Arguments: the input's path. `-h` or `--help` writes the help, and `-V` or `--version` the
+  version, to stdout instead, and opens nothing. `--` ends the flags, so a path that begins with
+  `-` can follow it.
 - stdout: the header `client,available,held,total,locked`, then one row per account by client id;
   balances with four decimals, never `-0.0000`; `locked` as `true` or `false`. It is written only
   once the run succeeds.
 - stderr: one line per count, the rejected commands by reason and then the malformed rows by
   kind, as `<count> rejected: <reason>` and `<count> malformed: <kind>`; nothing when there are
   none.
-- Exit status: `0` once the table and the report are written. Otherwise one line on stderr, and:
+- Exit status: `0` once the table and the report are written, or the help or the version.
+  Otherwise a message on stderr, and:
 
   | Status | Failure |
   |---|---|
-  | `2` | not exactly one argument |
+  | `2` | a usage error: no path, a second one, an empty one or an unknown flag; the message says what was wrong and points to `--help` |
   | `3` | the input cannot be opened |
   | `4` | the input cannot be read, or its header lacks `type`, `client` or `tx` |
-  | `5` | the table or the report cannot be written; lines already written stay |
+  | `5` | the table, the report, the help or the version cannot be written; lines already written stay |
 
 Input:
 

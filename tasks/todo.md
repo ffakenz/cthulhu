@@ -707,7 +707,7 @@ impl fmt::Display for Failure {
 
 ```make
 run: ## Run the cthulhu binary on INPUT, the table on stdout: make run INPUT=<file>
-	@$(CARGO) run --locked --bin cthulhu -- $(INPUT)
+	@$(CARGO) run --locked --bin cthulhu -- $${INPUT:+"$$INPUT"}
 ```
 
 ## Test code
@@ -1570,7 +1570,7 @@ fn prop_table_that_cannot_be_written_whole_is_an_error() {
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use backend::csv_io::SinkError;
 use backend::run::SourceError;
@@ -1645,8 +1645,20 @@ fn cthulhu(arguments: &[&Path]) -> io::Result<Output> {
 }
 
 /// Runs the binary with `arguments`, its stdout written to `stdout`.
-fn cthulhu_into(stdout: fs::File, arguments: &[&Path]) -> io::Result<Output> {
+fn cthulhu_into(stdout: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stdout(stdout).output()
+}
+
+/// Runs the binary with `arguments`, its stderr written to `stderr`.
+fn cthulhu_reporting_into(stderr: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
+    Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stderr(stderr).output()
+}
+
+/// The writing end of a pipe whose reading end is already closed: every write to it fails.
+fn closed_pipe() -> io::Result<io::PipeWriter> {
+    let (reader, writer) = io::pipe()?;
+    drop(reader);
+    Ok(writer)
 }
 
 /// These tests' scratch directory, created if missing.
@@ -1751,6 +1763,16 @@ fn a_full_output_is_a_write_failure() {
         String::from_utf8_lossy(&output.stderr),
         format!("error: {}\n", SinkError::Unwritable)
     );
+}
+
+#[test]
+fn a_report_that_cannot_be_written_is_a_write_failure() {
+    let path = input("closed-stderr.csv", REJECTED_AND_MALFORMED)
+        .expect("the scratch directory takes a file");
+    let closed = closed_pipe().expect("a pipe opens");
+    let output = cthulhu_reporting_into(closed, &[&path]).expect("the binary runs");
+    assert_eq!(output.status.code(), Some(5));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), REJECTED_AND_MALFORMED_TABLE);
 }
 ```
 
@@ -2057,16 +2079,19 @@ Red:
 
 Green:
 
-- [ ] `main.rs`, `text_io.rs` and `lib.rs`'s `pub mod text_io;` as Interfaces give them. The
+- [x] `main.rs`, `text_io.rs` and `lib.rs`'s `pub mod text_io;` as Interfaces give them. The
       `run` target in `Makefile`. `.claude/settings.json`: `Bash(make run:*)`.
-- [ ] `run.rs`: delete `the_overview_example_ends_with_its_documented_accounts`, `overview_rows`
+- [x] `run.rs`: delete `the_overview_example_ends_with_its_documented_accounts`, `overview_rows`
       and `overview_printed`, with the imports only they used: `DisputeReason`, `chargeback`,
       `deposit`, `dispute` and `withdrawal`.
-- [ ] `cargo test --workspace --locked`: 37 passed and 1 ignored on macOS (38 passed on Linux).
-- [ ] `make run INPUT=<the overview's input, saved in the scratchpad> > <scratchpad>/out.csv`:
+- [x] `cargo test --workspace --locked`: 37 passed and 1 ignored on macOS (38 passed on Linux).
+      Run: "37 passed; 0 failed; 1 ignored". With the review's report fixture, 38 and 1 ignored
+      (39 on Linux).
+- [x] `make run INPUT=<the overview's input, saved in the scratchpad> > <scratchpad>/out.csv`:
       `out.csv` holds exactly the overview's Output block, and stderr ends with its Report block
-      after cargo's own lines.
-- [ ] Docs, each in step with the code:
+      after cargo's own lines. Both compare byte for byte. `make run` without `INPUT` prints
+      `usage: cthulhu <input.csv>`, and make names the binary's status in `Error 2`.
+- [x] Docs, each in step with the code:
   - `docs/overview.md`:
     - § Input: a byte-order mark, blank lines, quoted fields and `\r\n` or `\r` line ends read as
       usual; a quote opens a quoted field only at the field's first byte;
@@ -2090,14 +2115,57 @@ Green:
     - § Tests: `cli.rs` drives the binary.
   - `docs/roadmap.md` § 1: an `Open:` line for a bound on one row's size, which needs a reader
     below csv and its own record (Questions on gaps 3).
-- [ ] Per-commit gate; commit `feat(cli): …`.
+- [x] Review fixes, staged before the green commit. The code-reviewer found no blocker and two
+      should-fixes, both taken:
+  - The report's write failure had no test. The fixture
+    `a_report_that_cannot_be_written_is_a_write_failure` hands the binary a stderr pipe whose
+    reader is closed (`io::pipe`, so it runs on every platform). It failed once against a
+    report mapped to status `4` (Law evidence), and that break was undone.
+  - `README.md` and `CLAUDE.md` no longer say the text adapter is held to laws: the binary's
+    fixtures hold it.
+
+  Nits taken, each a doc that was untrue or incomplete:
+  - the architecture legend names stderr;
+  - the report's `io::Error` path is drawn;
+  - the pipeline picture, `docs/patterns.md` and the roadmap name the report's sink;
+  - README's exit statuses are the binary's;
+  - the `make run` evidence above names make's `Error` line.
+
+  Raised with the person at the close, not acted on: *Sources, sinks and projections* does not
+  name `render_report`; and `Bash(make run:*)` with an unquoted `$(INPUT)` lets one approved
+  command run another.
+- [x] Per-commit gate; commit `feat(cli): …`. `make ci` green, 38 passed and 1 ignored; the
+      name greps and the record scan are silent.
 
 ### Task 5 — closing
 
-- [ ] The Review section of this plan: what the plan got wrong, what was narrower or wider, what
+- [x] The Review section of this plan: what the plan got wrong, what was narrower or wider, what
       was deliberately not done.
-- [ ] A final whole-branch review of `main..feat/stage-1-cli` on the most capable model
+- [x] A final whole-branch review of `main..feat/stage-1-cli` on the most capable model
       (`model: "fable"`, as stage 1's), with every important finding acted on.
+  - Result: no critical finding, one important, six minor; ready to merge with fixes.
+  - The important one: `Bash(make run:*)` auto-allowed any `make run …`, and the recipe passed
+    `$(INPUT)` unquoted to the shell. An allowed `make run INPUT='x; <command>'` ran the
+    command, and a `CARGO=`, `SHELL=` or `-f` override did too. The person chose to narrow and
+    quote:
+    - the allowance is the exact `Bash(make run)` again;
+    - the recipe passes `$${INPUT:+"$$INPUT"}`.
+  - Before: `make run INPUT='nope.csv; echo INJECTED'` printed `INJECTED` and exited 0. After:
+    the binary answers `error: cannot open nope.csv; echo INJECTED: …` with status 3. No
+    `INPUT` still gives the usage line, and a path with spaces now works. `make ci`: 38 passed,
+    1 ignored. No test pins the recipe; these runs are the evidence.
+  - The exact allowance, not the quotes, closes the hole: make itself expands a `$(…)` in a
+    command-line `INPUT` when it exports it to the recipe.
+  - The fix's review found no blocker. Taken from it: the Interfaces recipe, the stage 1 breaks
+    sentence, the wording of these notes and the Review, and the `tasks/lessons.md` entry. Under
+    zsh, `INPUT=~/…` now reaches the binary with a literal `~`, which README § Usage states.
+  - The review also found six allowances already on `main` with the same flaw: `cargo run:*` and
+    `cargo test:*` take a runner through `--config`, which runs any command, and `cargo build:*`,
+    `check:*`, `clippy:*` and `tree:*` run a wrapper named by path. Asked before the next commit,
+    the person chose to narrow them on this branch, in a commit of their own.
+  - The fix is folded into the command line's green commit, which introduced the recipe and the
+    allowance; `tasks/lessons.md` records the rule it teaches.
+  - The minors are left to the person (Review).
 - [ ] Prompt history 0005, with the prompt-history skill, committed alone.
 - [ ] superpowers:finishing-a-development-branch, keeping the branch as it is. Report what is on
       it and stop: pushing and landing are the person's.
@@ -2119,6 +2187,7 @@ One row per break, filled during execution: the law, its break, and the shrunk c
 | `prop_header_lacking_type_client_or_tx_ends_the_source` | the header check leaves out `tx` | no rows under the header `type,client,amount`: no error |
 | `prop_read_failure_ends_the_source` | an I/O error read as a malformed row | four client-1 rows cut mid-input: the last item is a malformed row, not `Unreadable` |
 | `a_header_that_is_not_utf8_lacks_its_columns` (example) | a header that is not UTF-8 read as `Unreadable` | the fixture's own header: `Unreadable`, not `IncompleteHeader` |
+| `a_report_that_cannot_be_written_is_a_write_failure` (fixture) | a failed report mapped to status `4` | the fixture's own input: status `4` where `5` is due |
 | `prop_table_is_the_naive_models` | the total column prints `held` | `[deposit(1, 0, "0.1")]`: total `0.0000` where the model prints `0.1000` |
 | `prop_table_that_cannot_be_written_whole_is_an_error` | `render_csv` returns without flushing | no rows, no extra account, room 0: `Ok(())` where the output took nothing; `csv::Writer`'s drop swallowed the failure |
 | `prop_table_that_cannot_be_written_whole_is_an_error` | both `write_record` failures mapped to `Overflow` | no rows, 248 extra accounts, room 0: the first table past the writer's 8 KiB buffer |
@@ -2261,4 +2330,51 @@ docs(prompts): add prompt history 0005 (stage 1 command line)
 
 ## Review
 
-*Filled in when the work closes.*
+- **What the plan got wrong, which the reviews caught:**
+  - `spoiled` hid three known `csv::ErrorKind`s behind its `#[expect]`. It now names all six,
+    and its `_` arm builds `Spoiled::Unknown`, so no suppression is left and a kind a later csv
+    adds fails `make lint`.
+  - Two laws reached less than they claimed. Each flawed spelling turned up about once per run;
+    `spelling::flawed()` splices up to two into the source law's input. No generated table
+    passed csv's 8 KiB writer buffer; `widened` adds up to 400 opened accounts, so the
+    `write_record` failures are reached.
+  - The non-UTF-8 header ruling and the report's write failure had no test; review added an
+    example test and a binary fixture, each shown failing once.
+  - Two stage 1 breaks were first re-run in forms other than stage 1's wording: a cache that
+    outlived its run, which failed the determinism law too, and a counter that added a
+    rejection. Re-run as worded, each fails its own law (Law evidence).
+  - The `make run` recipe and its allowance let an allowed command run another. Fixed as the
+    person chose (Task 5).
+- **Wider than the request:**
+  - a second sink, `text_io::render_report`, which keeps the report's wording out of the domain
+    and out of `main.rs` (Questions on gaps 6);
+  - `Flaw` and `TooManyFields { first, rest }` in the generated rows;
+  - paths with spaces through `make run`.
+
+  **Narrower:**
+  - unknown header columns follow serde's default, with no projection (Questions on gaps 1);
+  - `make run` passes `INPUT` with no shell expansion, so a `~` that zsh leaves after `=` stays.
+- **Commits:** red and green apart, as `CLAUDE.md` § Implementation asks. That gives the plan's
+  own commit first, three red/green pairs with the runtime laws' move onto CSV text between the
+  first two, and the prompt history last, as Commits lists them. The final review's fix is folded
+  into the command line's green commit.
+  - The plan-text sync of the sink red's review first rode in the sink's green commit, after a
+    script failed inside a `;`-joined chain; at the close, the person chose to fold it back into
+    the red.
+- **What it cost:**
+  - 26 tests became 38, plus the Linux-only `/dev/full` fixture.
+  - The suite takes about 2 s instead of 0.5 s.
+  - `Cargo.lock` gained `csv`, `csv-core` and `ryu`.
+- **Deliberately not done:**
+  - the benchmark generator, the measurements and the speed-ups;
+  - the four stage 1 items carried forward;
+  - the deferrals in Deliberately deferred.
+
+  The final review's minors are left to the person:
+  - *Sources, sinks and projections* names `CsvSource` and `render_csv` in its Governs line but
+    not `render_report`;
+  - "accounts table" in the code and docs against the records' "account table";
+  - no test pins the overview's `deposit, 1, 1, "1.0"` example;
+  - § Input does not say that a whitespace-only line is a malformed row;
+  - one line of `CLAUDE.md` § Status runs to 143 columns;
+  - `make run`'s stderr carries cargo's own lines above the report.

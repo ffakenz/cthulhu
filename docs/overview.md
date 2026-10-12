@@ -76,15 +76,33 @@ Dispute commands apply on locked accounts too. An arithmetic overflow would reje
 - `amount` is required for client commands and ignored for dispute commands: digits with an
   optional fraction, positive, exact at four decimals, below 10^15.
 - A malformed row is skipped and counted by kind; an I/O error, or a header missing any of
-  `type`, `client` or `tx`, stops the run.
+  `type`, `client` or `tx`, stops the run. An empty input has no header.
+- A byte-order mark, blank lines, quoted fields and `\r\n` or `\r` line ends read as usual. A
+  quote opens a quoted field only at the field's first byte, so `deposit, 1, 1, "1.0"` has an
+  invalid amount.
+- A column the header names besides these four is ignored, but a row that stops before it does
+  not read; a header naming `type`, `client`, `tx` or `amount` twice makes every row malformed.
+- A header that is not UTF-8 lacks the columns; a row holding a byte that is not UTF-8 is
+  malformed.
 
 ## Output
 
 *The command-line contract*.
 
 - stdout: the header `client,available,held,total,locked`, then one row per account by client id;
-  balances with four decimals, never `-0.0000`; `locked` as `true` or `false`.
-- stderr: counts of rejected commands by reason, and of malformed rows by kind.
+  balances with four decimals, never `-0.0000`; `locked` as `true` or `false`. It is written only
+  once the run succeeds.
+- stderr: one line per count, the rejected commands by reason and then the malformed rows by
+  kind, as `<count> rejected: <reason>` and `<count> malformed: <kind>`; nothing when there are
+  none.
+- Exit status: `0` once the table and the report are written. Otherwise one line on stderr, and:
+
+  | Status | Failure |
+  |---|---|
+  | `2` | not exactly one argument |
+  | `3` | the input cannot be opened |
+  | `4` | the input cannot be read, or its header lacks `type`, `client` or `tx` |
+  | `5` | the table or the report cannot be written; lines already written stay |
 
 Input:
 

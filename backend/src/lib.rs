@@ -5,3 +5,4 @@ pub mod csv_io;
 pub mod domain;
 pub mod memory;
 pub mod run;
+pub mod text_io;

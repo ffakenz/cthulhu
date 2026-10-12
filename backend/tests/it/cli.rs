@@ -4,7 +4,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use backend::csv_io::SinkError;
 use backend::run::SourceError;
@@ -79,8 +79,20 @@ fn cthulhu(arguments: &[&Path]) -> io::Result<Output> {
 }
 
 /// Runs the binary with `arguments`, its stdout written to `stdout`.
-fn cthulhu_into(stdout: fs::File, arguments: &[&Path]) -> io::Result<Output> {
+fn cthulhu_into(stdout: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stdout(stdout).output()
+}
+
+/// Runs the binary with `arguments`, its stderr written to `stderr`.
+fn cthulhu_reporting_into(stderr: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
+    Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stderr(stderr).output()
+}
+
+/// The writing end of a pipe whose reading end is already closed: every write to it fails.
+fn closed_pipe() -> io::Result<io::PipeWriter> {
+    let (reader, writer) = io::pipe()?;
+    drop(reader);
+    Ok(writer)
 }
 
 /// These tests' scratch directory, created if missing.
@@ -185,4 +197,14 @@ fn a_full_output_is_a_write_failure() {
         String::from_utf8_lossy(&output.stderr),
         format!("error: {}\n", SinkError::Unwritable)
     );
+}
+
+#[test]
+fn a_report_that_cannot_be_written_is_a_write_failure() {
+    let path = input("closed-stderr.csv", REJECTED_AND_MALFORMED)
+        .expect("the scratch directory takes a file");
+    let closed = closed_pipe().expect("a pipe opens");
+    let output = cthulhu_reporting_into(closed, &[&path]).expect("the binary runs");
+    assert_eq!(output.status.code(), Some(5));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), REJECTED_AND_MALFORMED_TABLE);
 }

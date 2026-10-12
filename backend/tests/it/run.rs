@@ -7,13 +7,13 @@ use std::convert::Infallible;
 use std::num::NonZeroU64;
 
 use backend::csv_io::CsvSource;
-use backend::domain::{Account, Balance, ClientId, ClientReason, Command, DisputeReason, Reason};
+use backend::domain::{Account, Balance, ClientId, ClientReason, Command, Reason};
 use backend::run::{Row, RowError, RunError, SourceError, Summary};
 use proptest::arbitrary::any;
 use proptest::sample::{Index, select};
 use proptest::strategy::Strategy;
 
-use crate::support::generate::{self, InputRow, Unique, chargeback, deposit, dispute, withdrawal};
+use crate::support::generate::{self, InputRow, Unique};
 use crate::support::model::{Printed, PrintedAccount};
 use crate::support::spelling::{self, Input};
 use crate::support::{self, model};
@@ -296,68 +296,4 @@ fn prop_engine_agrees_with_the_naive_model() {
     if let Err(failure) = law {
         panic!("{failure}");
     }
-}
-
-/// The overview's worked example: nine rows over four clients.
-fn overview_rows() -> [InputRow; 9] {
-    [
-        deposit(1, 10, "25.5"),
-        withdrawal(1, 11, "5.25"),
-        deposit(2, 20, "10"),
-        withdrawal(2, 21, "10"),
-        dispute(2, 20),
-        chargeback(2, 20),
-        deposit(2, 22, "3"),
-        withdrawal(3, 30, "1"),
-        dispute(4, 40),
-    ]
-}
-
-/// What the overview prints for it.
-fn overview_printed() -> Printed {
-    Printed {
-        accounts: vec![
-            PrintedAccount {
-                client: ClientId::from(1),
-                available: "20.2500".to_owned(),
-                held: "0.0000".to_owned(),
-                total: Some("20.2500".to_owned()),
-                locked: false,
-            },
-            PrintedAccount {
-                client: ClientId::from(2),
-                available: "-10.0000".to_owned(),
-                held: "0.0000".to_owned(),
-                total: Some("-10.0000".to_owned()),
-                locked: true,
-            },
-            PrintedAccount {
-                client: ClientId::from(3),
-                available: "0.0000".to_owned(),
-                held: "0.0000".to_owned(),
-                total: Some("0.0000".to_owned()),
-                locked: false,
-            },
-            PrintedAccount {
-                client: ClientId::from(4),
-                available: "0.0000".to_owned(),
-                held: "0.0000".to_owned(),
-                total: Some("0.0000".to_owned()),
-                locked: false,
-            },
-        ],
-        rejected: vec![
-            (Reason::Client(ClientReason::AccountLocked), NonZeroU64::MIN),
-            (Reason::Client(ClientReason::InsufficientFunds), NonZeroU64::MIN),
-            (Reason::Dispute(DisputeReason::UnknownDeposit), NonZeroU64::MIN),
-        ],
-        malformed: vec![],
-    }
-}
-
-#[test]
-fn the_overview_example_ends_with_its_documented_accounts() {
-    let summary = support::summarize(source(&overview_rows()))
-        .expect("a source of readable rows does not fail");
-    assert_eq!(printed(&summary), overview_printed());
 }

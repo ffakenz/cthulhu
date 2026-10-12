@@ -7,8 +7,10 @@ values — are enforced by the compiler, the lint gate and review.
 
 ## Status
 
-The library is built: the domain model, the core, the sequential runtime and the in-memory stores,
-each held to its laws. The command-line runtime is next.
+The library and the command line are built: the domain model, the core, the sequential runtime,
+the in-memory stores and the CSV adapters, each held to its laws, and the report's text adapter,
+held to the binary's fixtures. The `cthulhu` binary turns an input file into the accounts table.
+The benchmarks are next.
 
 ## Setup
 
@@ -25,16 +27,25 @@ only, `proptest`, with the 13 more it builds on. All of them are in use.
 ## Usage
 
 ```sh
-make          # list the targets
-make ci       # the commit gate: deps, fmt-check, lint, build, test
-make run      # run the cthulhu binary
+make                                   # list the targets
+make ci                                # the commit gate: deps, fmt-check, lint, build, test
+make run INPUT=input.csv > output.csv  # the accounts table for input.csv
 ```
 
-Once built, the engine runs as:
+`make run` passes `INPUT` to the binary as one argument, with no shell expansion. By default, zsh
+does not expand a `~` after `=` either, so under zsh write `INPUT=$HOME/…`, not `INPUT=~/…`.
+
+The engine runs as:
 
 ```sh
 cargo run -- input.csv > output.csv
 ```
+
+The accounts table goes to stdout, written only once the run succeeds. The counts of rejected
+commands and malformed rows go to stderr, one line each. The exit status of `cthulhu`, which
+`cargo run` passes on, is `0` on success, `2` for not exactly one argument, `3` when the input
+cannot be opened, `4` when it cannot be read or its header lacks `type`, `client` or `tx`, and `5`
+when the table or the report cannot be written; `make run` names it in its `Error` line.
 
 The design record *The command-line contract* fixes the argument, the streams and the exit
 status; [docs/overview.md](docs/overview.md) gives the formats and rules.
@@ -62,6 +73,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 │   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
+│   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, strategies and the model
 ├── docs/

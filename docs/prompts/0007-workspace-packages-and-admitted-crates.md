@@ -8,8 +8,9 @@ app split like the one in another of the person's repositories, and a config mod
 build what the person confirmed.
 
 **Outcome:** `feat/workspace-packages` holds thirteen commits on `a31b805`, unpushed:
-- the plan of record, [tasks/todo.md](../../tasks/todo.md), with the sample input's closed plan
-  kept as [tasks/sample-input-plan.md](../../tasks/sample-input-plan.md);
+- the plan of record, [tasks/workspace-packages-plan.md](../../tasks/workspace-packages-plan.md),
+  with the sample input's closed plan kept as
+  [tasks/sample-input-plan.md](../../tasks/sample-input-plan.md);
 - three records: *Layers as packages that depend inward*; *csv, serde, rust_decimal, thiserror,
   clap, proptest and rand as dependencies*, which supersedes the proptest one; and *The
   command-line contract with help and version*, which supersedes *The command-line contract*;

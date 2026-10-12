@@ -228,6 +228,16 @@ impl Input {
         }
         text
     }
+
+    /// The first `end` rows under the same layout; `None` when there are fewer than `end` rows.
+    pub(crate) fn prefix(&self, end: usize) -> Option<Self> {
+        self.rows.get(..end).map(|rows| self.with_rows(rows.to_vec()))
+    }
+
+    /// `rows` under this input's layout.
+    pub(crate) fn with_rows(&self, rows: Vec<InputRow>) -> Self {
+        Self::new(rows, self.layout.clone())
+    }
 }
 
 /// The fields `row` is written with under `columns`, as text before quoting and padding.

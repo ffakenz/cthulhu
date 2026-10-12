@@ -1,19 +1,21 @@
-//! Laws of the runtime: rows through intake, the decider and the stores, against the overview's
-//! laws and the naive model.
+//! Laws of the runtime: rows spelled as CSV text and read by the CSV source, then through intake,
+//! the decider and the stores, against the overview's laws and the naive model; and the runtime's
+//! contract with any source.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::num::NonZeroU64;
 
+use backend::csv_io::CsvSource;
 use backend::domain::{Account, Balance, ClientId, ClientReason, Command, DisputeReason, Reason};
-use backend::memory::{MemoryLedger, MemorySeenIds};
-use backend::run::{Row, RowError, RunError, SourceError, Summary, run};
+use backend::run::{Row, RowError, RunError, SourceError, Summary};
 use proptest::arbitrary::any;
 use proptest::sample::{Index, select};
 use proptest::strategy::Strategy;
 
 use crate::support::generate::{self, InputRow, Unique, chargeback, deposit, dispute, withdrawal};
 use crate::support::model::{Printed, PrintedAccount};
+use crate::support::spelling::{self, Input};
 use crate::support::{self, model};
 
 type Source = Vec<Result<Row, SourceError>>;
@@ -23,11 +25,9 @@ fn source(rows: &[InputRow]) -> Source {
     rows.iter().map(|input| Ok(generate::row(input))).collect()
 }
 
-/// `run` over fresh stores.
-fn summarize(
-    source: impl IntoIterator<Item = Result<Row, SourceError>>,
-) -> Result<Summary, RunError<Infallible, Infallible>> {
-    run(source, &mut MemoryLedger::default(), &mut MemorySeenIds::default())
+/// `input` through the CSV source and `run`, over fresh stores.
+fn summarized(input: &Input) -> Result<Summary, RunError<Infallible, Infallible>> {
+    support::summarize(CsvSource::new(input.text().as_slice()))
 }
 
 /// The summary as the output would print it.
@@ -91,19 +91,21 @@ fn broken_source() -> impl Strategy<Value = BrokenSource> {
     )
 }
 
-/// Rows with unique tx ids, and the same rows with the clients' turns reordered.
+/// A drawn input, its rows made unique, and those rows with the clients' turns reordered; the law
+/// spells both under the input's layout.
 #[derive(Debug, Clone)]
 struct Reordering {
+    input: Input,
     original: Unique,
     interleaved: Unique,
 }
 
-/// Generated rows made unique, and an interleaving of them.
+/// Generated rows made unique, and an interleaving of them, under a drawn layout.
 fn reordering() -> impl Strategy<Value = Reordering> {
-    (generate::rows(), generate::turns()).prop_map(|(rows, turns)| {
-        let original = generate::unique(&rows);
+    (spelling::input(), generate::turns()).prop_map(|(input, turns)| {
+        let original = generate::unique(input.rows());
         let interleaved = generate::interleave(&original, &turns);
-        Reordering { original, interleaved }
+        Reordering { input, original, interleaved }
     })
 }
 
@@ -130,17 +132,18 @@ fn malformed_counts(rows: &[InputRow]) -> BTreeMap<RowError, NonZeroU64> {
 fn prop_tx_ids_are_consumed_on_first_sight_across_clients() {
     let law = support::for_all(
         "a tx id is consumed by the first deposit or withdrawal naming it, whatever its outcome, for every client",
-        generate::rows(),
-        |rows| {
+        spelling::input(),
+        |input| {
             let mut used = BTreeSet::new();
-            let repeats = rows
+            let repeats = input
+                .rows()
                 .iter()
-                .filter(|input| match generate::row(input) {
+                .filter(|row| match generate::row(row) {
                     Row::Parsed(Command::Client(command)) => !used.insert(command.address().tx()),
                     Row::Parsed(Command::Dispute(_)) | Row::Malformed(_) => false,
                 })
                 .count();
-            summarize(source(rows)).is_ok_and(|summary| {
+            summarized(input).is_ok_and(|summary| {
                 let duplicates = summary
                     .report
                     .rejected()
@@ -159,10 +162,10 @@ fn prop_tx_ids_are_consumed_on_first_sight_across_clients() {
 fn prop_rejection_changes_no_balance() {
     let law = support::for_all(
         "a rejection changes no balance; a client with no account counts as zero",
-        generate::rows(),
-        |rows| {
-            let summaries: Option<Vec<Summary>> = (0..=rows.len())
-                .map(|end| rows.get(..end).and_then(|prefix| summarize(source(prefix)).ok()))
+        spelling::input(),
+        |input| {
+            let summaries: Option<Vec<Summary>> = (0..=input.rows().len())
+                .map(|end| input.prefix(end).and_then(|prefix| summarized(&prefix).ok()))
                 .collect();
             summaries.is_some_and(|summaries| {
                 summaries.windows(2).all(|pair| match pair {
@@ -184,12 +187,12 @@ fn prop_rejection_changes_no_balance() {
 fn prop_malformed_rows_are_skipped_and_counted() {
     let law = support::for_all(
         "a malformed row changes no account and no rejection, and is counted by kind",
-        generate::rows(),
-        |rows| {
+        spelling::input(),
+        |input| {
             let parsed: Vec<InputRow> =
-                rows.iter().filter(|input| parses(input)).cloned().collect();
-            let expected = malformed_counts(rows);
-            match (summarize(source(rows)), summarize(source(&parsed))) {
+                input.rows().iter().filter(|row| parses(row)).cloned().collect();
+            let expected = malformed_counts(input.rows());
+            match (summarized(input), summarized(&input.with_rows(parsed))) {
                 (Ok(all), Ok(without)) => {
                     all.accounts == without.accounts
                         && all.report.rejected().eq(without.report.rejected())
@@ -220,7 +223,8 @@ fn prop_source_error_stops_the_run_with_no_summary() {
             items.push(Err(last));
             let unread = items.len().saturating_sub(position.saturating_add(1));
             let mut rest = items.into_iter();
-            summarize(rest.by_ref()) == Err(RunError::Source(*first)) && rest.len() == unread
+            support::summarize(rest.by_ref()) == Err(RunError::Source(*first))
+                && rest.len() == unread
         },
     );
     if let Err(failure) = law {
@@ -232,12 +236,12 @@ fn prop_source_error_stops_the_run_with_no_summary() {
 fn prop_report_stays_bounded() {
     let law = support::for_all(
         "the report holds one count per kind, however many rows",
-        generate::rows(),
-        |rows| {
-            let malformed_rows = malformed_counts(rows)
+        spelling::input(),
+        |input| {
+            let malformed_rows = malformed_counts(input.rows())
                 .values()
                 .fold(0_u64, |sum, count| sum.saturating_add(count.get()));
-            summarize(source(rows)).is_ok_and(|summary| {
+            summarized(input).is_ok_and(|summary| {
                 let reasons: Vec<Reason> = summary.report.rejected().map(|(key, _)| key).collect();
                 let kinds: Vec<RowError> = summary.report.malformed().map(|(key, _)| key).collect();
                 let counted = summary
@@ -257,8 +261,8 @@ fn prop_report_stays_bounded() {
 
 #[test]
 fn prop_same_rows_give_the_same_summary() {
-    let law = support::for_all("the same rows give the same summary", generate::rows(), |rows| {
-        summarize(source(rows)) == summarize(source(rows))
+    let law = support::for_all("the same rows give the same summary", spelling::input(), |input| {
+        summarized(input) == summarized(input)
     });
     if let Err(failure) = law {
         panic!("{failure}");
@@ -270,9 +274,9 @@ fn prop_reordering_clients_changes_no_account() {
     let law = support::for_all(
         "reordering rows of different clients changes no account, given unique tx ids",
         reordering(),
-        |Reordering { original, interleaved }| match (
-            summarize(source(original.rows())),
-            summarize(source(interleaved.rows())),
+        |Reordering { input, original, interleaved }| match (
+            summarized(&input.with_rows(original.rows().to_vec())),
+            summarized(&input.with_rows(interleaved.rows().to_vec())),
         ) {
             (Ok(original), Ok(reordered)) => original.accounts == reordered.accounts,
             _ => false,
@@ -286,8 +290,8 @@ fn prop_reordering_clients_changes_no_account() {
 #[test]
 fn prop_engine_agrees_with_the_naive_model() {
     let law =
-        support::for_all("run reports what the naive model expects", generate::rows(), |rows| {
-            summarize(source(rows)).is_ok_and(|summary| printed(&summary) == model::printed(rows))
+        support::for_all("run reports what the naive model expects", spelling::input(), |input| {
+            summarized(input).is_ok_and(|summary| printed(&summary) == model::printed(input.rows()))
         });
     if let Err(failure) = law {
         panic!("{failure}");
@@ -353,7 +357,7 @@ fn overview_printed() -> Printed {
 
 #[test]
 fn the_overview_example_ends_with_its_documented_accounts() {
-    let summary =
-        summarize(source(&overview_rows())).expect("a source of readable rows does not fail");
+    let summary = support::summarize(source(&overview_rows()))
+        .expect("a source of readable rows does not fail");
     assert_eq!(printed(&summary), overview_printed());
 }

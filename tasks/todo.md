@@ -1008,7 +1008,7 @@ impl Input {
         text
     }
 
-    /// The first `end` rows under the same layout; `None` past the last row.
+    /// The first `end` rows under the same layout; `None` when there are fewer than `end` rows.
     pub(crate) fn prefix(&self, end: usize) -> Option<Self> {
         self.rows.get(..end).map(|rows| self.with_rows(rows.to_vec()))
     }
@@ -1524,7 +1524,8 @@ fn prop_table_that_cannot_be_written_whole_is_an_error() {
 - The reordering law:
 
   ```rust
-  /// Rows with unique tx ids under a layout, and the same rows with the clients' turns reordered.
+  /// A drawn input, its rows made unique, and those rows with the clients' turns reordered; the law
+/// spells both under the input's layout.
   #[derive(Debug, Clone)]
   struct Reordering {
       input: Input,
@@ -1922,14 +1923,27 @@ Green:
 
 ### Task 2 — the runtime's laws through the source
 
-- [ ] `support.rs`: `summarize`, moved from `run.rs`, with the imports it needs: `Infallible`,
+- [x] `support.rs`: `summarize`, moved from `run.rs`, with the imports it needs: `Infallible`,
       `MemoryLedger`, `MemorySeenIds`, `Row`, `RunError`, `SourceError`, `Summary` and `run`.
       `spelling.rs`: `prefix` and `with_rows`. `model.rs`: `Engine::after`, through which
       `printed` folds. `run.rs` as Test code says.
-- [ ] `cargo test --workspace --locked`: 30 passed. `git diff -w backend/tests/it/run.rs` shows
-      only inputs and helpers changing.
-- [ ] Law evidence: the seven switched laws, each against its stage 1 break.
-- [ ] Per-commit gate; commit `test(it): …`.
+- [x] `cargo test --workspace --locked`: 30 passed. `git diff -w backend/tests/it/run.rs` shows
+      only inputs and helpers changing. Run: "30 passed; 0 failed". The diff changes only module
+      docs, imports, `summarized`, `Reordering` and each law's input and calls; no label and no
+      law's logic changes.
+- [x] Law evidence: the seven switched laws, each against its stage 1 break. All seven failed
+      their law, not the build, and were undone with `git diff --quiet`; no regression file was
+      written.
+- [x] Review fixes, staged before the commit. The code-reviewer found no blocker and one
+      should-fix: two evidence rows did not run stage 1's breaks as worded.
+  - The footprint cache outlived its run, so it failed the determinism law too.
+  - The run counter added a rejection instead of raising the first count.
+  - Re-run with the cache reset at each run and the counter added to the first rejection count:
+    both laws fail with the counterexamples above.
+  - Nits taken: the `Reordering` and `prefix` docs, and "over rows" in the commit message, since
+    the broken-source law keeps its synthetic source.
+- [x] Per-commit gate; commit `test(it): …`. `make ci` green, 30 passed; the review's should-fix
+      is taken (above); the name greps and the record scan are silent.
 
 ### Task 3 — the CSV sink
 
@@ -2039,13 +2053,13 @@ One row per break, filled during execution: the law, its break, and the shrunk c
 | `a_header_that_is_not_utf8_lacks_its_columns` (example) | a header that is not UTF-8 read as `Unreadable` | the fixture's own header: `Unreadable`, not `IncompleteHeader` |
 | `prop_table_is_the_naive_models` | the total column prints `held` | |
 | `prop_table_that_cannot_be_written_whole_is_an_error` | `render_csv` returns without flushing | |
-| `prop_tx_ids_are_consumed_on_first_sight_across_clients` | withdrawals skip intake and are decided as `Sight::First` | |
-| `prop_rejection_changes_no_balance` | after a rejection at a loaded footprint, `apply_at` commits `open()` | |
-| `prop_malformed_rows_are_skipped_and_counted` | `Row::Malformed` is skipped uncounted | |
-| `prop_report_stays_bounded` | rejections kept as a `Vec`, one entry per refused row | |
-| `prop_same_rows_give_the_same_summary` | a `static` run counter added to the first rejection count | |
-| `prop_reordering_clients_changes_no_account` | a one-entry footprint cache keyed by the tx id alone | |
-| `prop_engine_agrees_with_the_naive_model` | `InsufficientFunds` when the amount is not below `available` | |
+| `prop_tx_ids_are_consumed_on_first_sight_across_clients` | withdrawals skip intake and are decided as `Sight::First` | `[withdrawal(1, 0, "1.50000"), withdrawal(1, 0, "0.1")]` |
+| `prop_rejection_changes_no_balance` | after a rejection at a loaded footprint, `apply_at` commits `open()` | `[deposit(100, 0, "0"), deposit(100, 1, "1"), dispute(100, 0), chargeback(100, 0)]` |
+| `prop_malformed_rows_are_skipped_and_counted` | `Row::Malformed` is skipped uncounted | `[Unreadable(Type("Deposit"))]` |
+| `prop_report_stays_bounded` | rejections kept as a `Vec`, one entry per refused row | `[dispute(1, 0), withdrawal(1, 1, "1")]` |
+| `prop_same_rows_give_the_same_summary` | a `static` run counter added to the first rejection count | `[withdrawal(1, 0, "0.1")]` |
+| `prop_reordering_clients_changes_no_account` | a one-entry footprint cache keyed by the tx id alone, reset at each run | original `[deposit(1, 0, "1"), dispute(1, 0), dispute(2, 0)]`, interleaved `[deposit(1, 0, "1"), dispute(2, 0), dispute(1, 0)]`: client 2's dispute reads client 1's cached deposit |
+| `prop_engine_agrees_with_the_naive_model` | `InsufficientFunds` when the amount is not below `available` | `[deposit(100, 0, "0.1"), withdrawal(100, 1, "0.1")]` |
 
 `prop_source_error_stops_the_run_with_no_summary` keeps its synthetic source and is not re-run.
 The domain, core and memory laws read no CSV, and their inputs are unchanged apart from the
@@ -2077,8 +2091,8 @@ feat(csv_io): read CSV rows into commands at the boundary
 ```text
 test(it): feed the runtime's laws CSV text through the source
 
-> Every runtime law reaches the engine through the production source, so no spelling of the
-> input can hide a bug behind the model's own parser.
+> Every runtime law over rows reaches the engine through the production source, so no spelling
+> of the input can hide a bug behind the model's own parser.
 ```
 
 ```text

@@ -120,10 +120,7 @@ pub(crate) struct Printed {
 
 /// What the naive engine prints for `rows`.
 pub(crate) fn printed(rows: &[InputRow]) -> Printed {
-    let mut engine = Engine::default();
-    for input in rows {
-        engine.take(input);
-    }
+    let engine = Engine::after(rows);
     Printed {
         accounts: engine
             .accounts
@@ -142,6 +139,15 @@ pub(crate) fn printed(rows: &[InputRow]) -> Printed {
 }
 
 impl Engine {
+    /// The naive engine after taking `rows`, in order.
+    fn after(rows: &[InputRow]) -> Self {
+        let mut engine = Self::default();
+        for input in rows {
+            engine.take(input);
+        }
+        engine
+    }
+
     /// One input row, as the overview's tables say.
     fn take(&mut self, input: &InputRow) {
         match input {

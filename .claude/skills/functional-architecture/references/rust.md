@@ -413,7 +413,7 @@ decision record ([[architecture-decisions]]).
 - **Naming.** `UpperCamelCase` for types, traits and variants; `snake_case` for functions, modules
   and variables; `SCREAMING_SNAKE_CASE` for constants and statics. rustc's `nonstandard_style`
   lints warn on the rest. A module is named for the concept it holds (`order`, `journal`), never
-  `utils`, `common` or `helpers`; test modules mirror source modules.
+  `utils`, `common` or `helpers`; test modules are named for the surface they drive.
 - **Imports.** std through its module where the bare name is ambiguous (`io::Error`, `fmt::Result`,
   `error::Error`); crate items by name (`use crate::order::Quantity;`). No glob imports except
   `use super::*` in a unit-test module, which pedantic `wildcard_imports` exempts.

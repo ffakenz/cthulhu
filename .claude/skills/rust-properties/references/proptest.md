@@ -63,7 +63,6 @@ Both round trips of the `Quantity` parser in
 ```rust,ignore
 mod quantity {
     use engine::{Quantity, QuantityError};
-    use proptest::arbitrary::any;
     use proptest::collection::vec;
     use proptest::prop_oneof;
     use proptest::sample::select;
@@ -84,24 +83,29 @@ mod quantity {
         ]
     }
 
-    /// A `u32`: one draw in four an edge, otherwise any.
+    /// A `u32` other than zero: one draw in four an edge, otherwise any.
     fn number() -> impl Strategy<Value = u32> {
-        prop_oneof![1 => select(&[0, 1, u32::MAX]), 3 => any::<u32>()]
+        prop_oneof![1 => select(&[1, u32::MAX]), 3 => 1..=u32::MAX]
     }
 
     #[test]
     fn prop_value_round_trips_through_text() {
         let law = support::for_all(
-            "a quantity's text parses back to it; only zero is refused",
+            "a quantity's text parses back to it",
             number(),
-            |&n| match n.to_string().parse::<Quantity>() {
-                Ok(quantity) => quantity.to_string().parse() == Ok(quantity),
-                Err(error) => n == 0 && error == QuantityError::Zero,
+            |&n| {
+                n.to_string().parse::<Quantity>().map(|quantity| quantity.to_string())
+                    == Ok(n.to_string())
             },
         );
         if let Err(failure) = law {
             panic!("{failure}");
         }
+    }
+
+    #[test]
+    fn zero_is_refused() {
+        assert_eq!("0".parse::<Quantity>(), Err(QuantityError::Zero));
     }
 
     #[test]
@@ -125,7 +129,8 @@ mod quantity {
   constructor exists only for tests, so every counterexample is a value production can receive.
 - `SPELLING` mixes digits with the characters the std integer parser treats specially, and
   `prop_oneof!` sends one draw in four to an edge: empty, zero, `u32::MAX`, and one past it.
-- The value round trip states its boundary too: zero is the one `u32` it may refuse.
+- The value round trip draws only values a quantity holds. Zero, the one `u32` it refuses, has a
+  test of its own, so no law checks success and failure together.
 - Each law panics in its `#[test]` function, where `clippy.toml` allows it.
 
 Swap in a parser that delegates to `str::parse::<u32>` and the value round trip still passes on
@@ -199,8 +204,8 @@ fn rows() -> impl Strategy<Value = Vec<Row>> {
   deposit, each `prop_oneof!` toward its first arm. A dispute drawn before any deposit builds a
   deposit instead, so no draw is invalid.
 - `Index::index` panics on an empty collection; `pick` checks first.
-- The engine's laws need no picks. `support::input` draws each field from a small domain, so
-  repeats and collisions come up without being built, and the laws compare runs with each other.
+- The engine's laws need no picks: `run.rs` passes small id domains to `support::input::any_line`,
+  so repeats and collisions come up without being built, and the laws compare runs with each other.
 
 ## Driving a state machine
 

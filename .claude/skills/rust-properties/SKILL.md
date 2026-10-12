@@ -62,8 +62,10 @@ generated spellings, near-misses included: every spelling that parses re-renders
   Failure has generators of its own: a flaw per field, composed with valid fields, makes a
   malformed input that knows how it must fail.
 - **A property checks success or failure, never both.** Valid input comes from the valid
-  generators and malformed input from the flaws, so a law that branches on the outcome it is
-  checking is two laws.
+  generators and malformed input from the flaws, and each law asserts the one outcome its input
+  must have: a law that expects `Ok` for some draws and a given `Err` for others is two laws. A law
+  over raw text that only asks what parses to render back, as the reverse round trip does, asserts
+  no failure.
 - **Bias the strategy toward the edges.** `prop_oneof![3 => ordinary, 1 => edge]` sends one draw
   in four to an edge: zero, empty, `MAX` and one past it, the status just before a terminal one.
   Uniform draws over a `u32` reach zero about once in four billion. List first the arm a

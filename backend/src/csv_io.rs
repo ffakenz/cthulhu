@@ -1,11 +1,12 @@
-//! The CSV adapters: `CsvSource` reads rows from CSV text into commands.
+//! The CSV adapters: `CsvSource` reads rows from CSV text into commands, and `render_csv` writes
+//! the accounts table as CSV.
 
 use std::error;
 use std::fmt;
 use std::io::{Read, Write};
 use std::mem;
 
-use csv::{ErrorKind, ReaderBuilder, StringRecord, Trim};
+use csv::{ErrorKind, ReaderBuilder, StringRecord, Trim, Writer};
 use serde::Deserialize;
 
 use crate::domain::{Address, Amount, ClientCommand, ClientId, Command, DisputeCommand, TxId};
@@ -13,6 +14,9 @@ use crate::run::{Accounts, Row, RowError, SourceError};
 
 /// The columns every header names.
 const REQUIRED: [&str; 3] = ["type", "client", "tx"];
+
+/// The accounts table's header.
+const HEADER: [&str; 5] = ["client", "available", "held", "total", "locked"];
 
 /// A row as the CSV source reads it: its type, its client and tx id, and its amount's text,
 /// `None` when the header names no amount, or the row leaves it empty or stops before it.
@@ -184,7 +188,22 @@ impl fmt::Display for SinkError {
 
 impl error::Error for SinkError {}
 
-/// Writes nothing to `_out`.
-pub fn render_csv(_accounts: &Accounts, _out: &mut impl Write) -> Result<(), SinkError> {
-    Ok(())
+/// Writes `accounts` to `out` as CSV and flushes it: the header
+/// `client,available,held,total,locked`, then a line per account by client id, each balance with
+/// four decimals and `locked` as `true` or `false`. Lines written before a failure stay written.
+pub fn render_csv(accounts: &Accounts, out: &mut impl Write) -> Result<(), SinkError> {
+    let mut writer = Writer::from_writer(out);
+    writer.write_record(HEADER).map_err(|_| SinkError::Unwritable)?;
+    for (client, account) in accounts.by_client() {
+        let total = account.total().ok_or(SinkError::Overflow(client))?;
+        let line = [
+            client.to_string(),
+            account.available().to_string(),
+            account.held().to_string(),
+            total.to_string(),
+            account.is_locked().to_string(),
+        ];
+        writer.write_record(line).map_err(|_| SinkError::Unwritable)?;
+    }
+    writer.flush().map_err(|_| SinkError::Unwritable)
 }

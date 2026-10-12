@@ -4,8 +4,10 @@
 
 use std::io::{self, Read, Write};
 
+use backend::core::open;
 use backend::csv_io::{CsvSource, SinkError, render_csv};
-use backend::run::{Row, SourceError};
+use backend::domain::ClientId;
+use backend::run::{Accounts, Row, SourceError};
 use proptest::arbitrary::any;
 use proptest::sample::Index;
 
@@ -139,22 +141,31 @@ fn prop_table_is_the_naive_models() {
     }
 }
 
+/// `accounts`, and `extra` more opened accounts from client 65535 down: enough of them make a
+/// table longer than the writer's buffer, so writes fail before the final flush.
+fn widened(accounts: &Accounts, extra: u16) -> Accounts {
+    let opened =
+        (0..extra).map(|n| (ClientId::from(u16::MAX.saturating_sub(n)), *open().account()));
+    accounts.by_client().chain(opened).collect()
+}
+
 #[test]
 fn prop_table_that_cannot_be_written_whole_is_an_error() {
     let law = support::for_all(
         "a table, never empty, that the output takes only in part is an Unwritable error; one it takes whole succeeds",
-        (spelling::input(), any::<Index>()),
-        |(input, room)| {
+        (spelling::input(), 0..=400_u16, any::<Index>()),
+        |(input, extra, room)| {
             let Ok(summary) = support::summarize(CsvSource::new(input.text().as_slice())) else {
                 return false;
             };
+            let accounts = widened(&summary.accounts, *extra);
             let mut whole = Vec::new();
-            if render_csv(&summary.accounts, &mut whole).is_err() || whole.is_empty() {
+            if render_csv(&accounts, &mut whole).is_err() || whole.is_empty() {
                 return false;
             }
             let room = room.index(whole.len().saturating_add(1));
             let mut out = Full { written: Vec::new(), room };
-            match render_csv(&summary.accounts, &mut out) {
+            match render_csv(&accounts, &mut out) {
                 Ok(()) => room == whole.len() && out.written == whole,
                 Err(error) => room < whole.len() && error == SinkError::Unwritable,
             }

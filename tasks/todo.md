@@ -315,7 +315,7 @@ Task 1 lands the source:
 Task 3 adds the rest:
 - red: `SinkError` with its impls, the stub `render_csv`, and the imports `error`, `fmt`,
   `Write` and `Accounts`;
-- green: `TABLE`, the `Writer` import, the real `render_csv`, and the module doc's clause on
+- green: `HEADER`, the `Writer` import, the real `render_csv`, and the module doc's clause on
   `render_csv`.
 
 ```rust
@@ -337,7 +337,7 @@ use crate::run::{Accounts, Row, RowError, SourceError};
 const REQUIRED: [&str; 3] = ["type", "client", "tx"];
 
 /// The accounts table's header.
-const TABLE: [&str; 5] = ["client", "available", "held", "total", "locked"];
+const HEADER: [&str; 5] = ["client", "available", "held", "total", "locked"];
 
 /// A row as the CSV source reads it: its type, its client and tx id, and its amount's text,
 /// `None` when the header names no amount, or the row leaves it empty or stops before it.
@@ -514,7 +514,7 @@ impl error::Error for SinkError {}
 /// four decimals and `locked` as `true` or `false`. Lines written before a failure stay written.
 pub fn render_csv(accounts: &Accounts, out: &mut impl Write) -> Result<(), SinkError> {
     let mut writer = Writer::from_writer(out);
-    writer.write_record(TABLE).map_err(|_| SinkError::Unwritable)?;
+    writer.write_record(HEADER).map_err(|_| SinkError::Unwritable)?;
     for (client, account) in accounts.by_client() {
         let total = account.total().ok_or(SinkError::Overflow(client))?;
         let line = [
@@ -1338,8 +1338,10 @@ pub(crate) fn table(rows: &[InputRow]) -> String {
 
 use std::io::{self, Read, Write};
 
+use backend::core::open;
 use backend::csv_io::{CsvSource, SinkError, render_csv};
-use backend::run::{Row, SourceError};
+use backend::domain::ClientId;
+use backend::run::{Accounts, Row, SourceError};
 use proptest::arbitrary::any;
 use proptest::sample::Index;
 
@@ -1473,22 +1475,30 @@ fn prop_table_is_the_naive_models() {
     }
 }
 
+/// `accounts`, and `extra` more opened accounts from client 65535 down: enough of them make a
+/// table longer than the writer's buffer, so writes fail before the final flush.
+fn widened(accounts: &Accounts, extra: u16) -> Accounts {
+    let opened = (0..extra).map(|n| (ClientId::from(u16::MAX.saturating_sub(n)), *open().account()));
+    accounts.by_client().chain(opened).collect()
+}
+
 #[test]
 fn prop_table_that_cannot_be_written_whole_is_an_error() {
     let law = support::for_all(
         "a table, never empty, that the output takes only in part is an Unwritable error; one it takes whole succeeds",
-        (spelling::input(), any::<Index>()),
-        |(input, room)| {
+        (spelling::input(), 0..=400_u16, any::<Index>()),
+        |(input, extra, room)| {
             let Ok(summary) = support::summarize(CsvSource::new(input.text().as_slice())) else {
                 return false;
             };
+            let accounts = widened(&summary.accounts, *extra);
             let mut whole = Vec::new();
-            if render_csv(&summary.accounts, &mut whole).is_err() || whole.is_empty() {
+            if render_csv(&accounts, &mut whole).is_err() || whole.is_empty() {
                 return false;
             }
             let room = room.index(whole.len().saturating_add(1));
             let mut out = Full { written: Vec::new(), room };
-            match render_csv(&summary.accounts, &mut out) {
+            match render_csv(&accounts, &mut out) {
                 Ok(()) => room == whole.len() && out.written == whole,
                 Err(error) => room < whole.len() && error == SinkError::Unwritable,
             }
@@ -1966,9 +1976,9 @@ Red:
   - `model::table` collects its lines and concatenates them, since clippy refuses `format!`
     pushed onto a `String`.
   - The module doc's clause on `render_csv` waits for the green, where it becomes true.
-- [x] Per-commit gate (red); commit `test(csv_io): …`. The deps, fmt-check, lint and build
-      checks are green; the tests fail as above; the name greps and the record scan are silent.
-      The code-reviewer found no blocker and no should-fix, and six nits are taken:
+- [x] Per-commit gate (red); commit `test(csv_io): …`: `603a0a0`. The deps, fmt-check, lint and
+      build checks are green; the tests fail as above; the name greps and the record scan are
+      silent. The code-reviewer found no blocker and no should-fix, and six nits are taken:
   - the write-failure law guards on an empty table, not on the header, so a format break fails
     only the table law;
   - `ClientId`'s doc names no table;
@@ -1980,13 +1990,25 @@ Red:
 
 Green:
 
-- [ ] `render_csv` as Interfaces gives it.
-- [ ] `cargo test --workspace --locked`: 32 passed. Law evidence: the two sink breaks.
-- [ ] `docs/architecture.md`:
+- [x] `render_csv` as Interfaces gives it, with the module doc's clause on it.
+- [x] `cargo test --workspace --locked`: 32 passed. Law evidence: the two sink breaks. Run:
+      "32 passed; 0 failed". Both breaks failed their law and were undone with `git diff --quiet`;
+      no regression file was written.
+- [x] `docs/architecture.md`:
   - the `csv_io` row of § Modules holds `SinkError`;
   - § In detail shows `render_csv`'s failure, `SinkError`, reaching `ExitCode` beside
     `RunError`.
-- [ ] Per-commit gate; commit `feat(csv_io): …`.
+- [x] Review fixes, staged before the green commit. The code-reviewer found no blocker and one
+      should-fix: generated tables never passed `csv::Writer`'s 8 KiB buffer, so no law reached
+      the two `write_record` failures.
+  - The write-failure law now renders up to 400 extra opened accounts (`widened`), and the
+    break mapping those failures to `Overflow` fails it (Law evidence).
+  - Nits taken: `TABLE` becomes `HEADER`, and the architecture picture branches `SinkError` off
+    `render_csv` with a `┬`.
+  - Left for the final review: "accounts table" against the records' "account table", and the
+    `Drop` retry, which the Risks already record.
+- [x] Per-commit gate; commit `feat(csv_io): …`. `make ci` green, 32 passed; the name greps and
+      the record scan are silent.
 
 ### Task 4 — the command line
 
@@ -2064,8 +2086,9 @@ One row per break, filled during execution: the law, its break, and the shrunk c
 | `prop_header_lacking_type_client_or_tx_ends_the_source` | the header check leaves out `tx` | no rows under the header `type,client,amount`: no error |
 | `prop_read_failure_ends_the_source` | an I/O error read as a malformed row | four client-1 rows cut mid-input: the last item is a malformed row, not `Unreadable` |
 | `a_header_that_is_not_utf8_lacks_its_columns` (example) | a header that is not UTF-8 read as `Unreadable` | the fixture's own header: `Unreadable`, not `IncompleteHeader` |
-| `prop_table_is_the_naive_models` | the total column prints `held` | |
-| `prop_table_that_cannot_be_written_whole_is_an_error` | `render_csv` returns without flushing | |
+| `prop_table_is_the_naive_models` | the total column prints `held` | `[deposit(1, 0, "0.1")]`: total `0.0000` where the model prints `0.1000` |
+| `prop_table_that_cannot_be_written_whole_is_an_error` | `render_csv` returns without flushing | no rows, no extra account, room 0: `Ok(())` where the output took nothing; `csv::Writer`'s drop swallowed the failure |
+| `prop_table_that_cannot_be_written_whole_is_an_error` | both `write_record` failures mapped to `Overflow` | no rows, 248 extra accounts, room 0: the first table past the writer's 8 KiB buffer |
 | `prop_tx_ids_are_consumed_on_first_sight_across_clients` | withdrawals skip intake and are decided as `Sight::First` | `[withdrawal(1, 0, "1.50000"), withdrawal(1, 0, "0.1")]` |
 | `prop_rejection_changes_no_balance` | after a rejection at a loaded footprint, `apply_at` commits `open()` | `[deposit(100, 0, "0"), deposit(100, 1, "1"), dispute(100, 0), chargeback(100, 0)]` |
 | `prop_malformed_rows_are_skipped_and_counted` | `Row::Malformed` is skipped uncounted | `[Unreadable(Type("Deposit"))]` |

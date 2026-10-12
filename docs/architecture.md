@@ -51,7 +51,8 @@ their laws*, *Entities identified by their keys*.
 
  end of input ──► [LedgerStore] snapshot ──► Accounts ──┐
                                                Report ──┴──► Summary ──► main.rs
- main.rs ─┬─► render_csv(Accounts) ──► [Write] (stdout)
+ main.rs ─┬─► render_csv(Accounts) ──┬─► [Write] (stdout)
+          │                          └─► SinkError ──► ExitCode
           ├─► Report ──► stderr
           └─► RunError ──► ExitCode
 ```
@@ -87,7 +88,8 @@ one partition, and the reference that every later runtime must equal.
 │ main.rs  composition root: argument, file, stdio, exit code    │
 ├───────────────────────────────┬────────────────────────────────┤
 │ csv_io   CsvSource,           │ memory   MemoryLedger,         │
-│          render_csv           │          MemorySeenIds         │
+│          render_csv,          │          MemorySeenIds         │
+│          SinkError            │                                │
 │          (csv, serde)         │                                │
 ├───────────────────────────────┴────────────────────────────────┤
 │ run      the runtime; ports: source, LedgerStore, SeenIds;     │
@@ -113,7 +115,7 @@ implements the source over `Read` and renders onto `Write`, and only `main.rs` t
 | `core` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
 | `run` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
 | `memory` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
-| `csv_io` | `CsvRow`, `CsvSource`, `render_csv` | `csv`, `serde`, `domain`, `run` |
+| `csv_io` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `domain`, `run` |
 | `main.rs` | the argument, the input file, stdio, `ExitCode` | the library |
 
 - `domain` is the model in the records' terms: values, entities and messages, each entity reached

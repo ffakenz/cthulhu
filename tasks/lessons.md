@@ -153,3 +153,20 @@ before the commit.
   instead; never edit the condition while ticking it.
 - A step that asks for the person's consent waits for it at that moment. A plan's approval and a
   permission system that lets the call through are not that consent.
+
+## 2026-10-12 — Measured the wait on the person instead of the agent's own time
+
+**What happened.** Asked why sessions take too long, I measured them from their transcripts and
+led with the time the agent sat blocked on the person: permission prompts, questions and plan
+approvals. The person corrected the scope: that wait is not the problem; the agent's own time is.
+
+**What I got wrong.**
+
+1. I took a turn's whole wall-clock as the agent's time, so the waits on the person dominated
+   the numbers.
+2. I reported those waits as a finding before checking they were what the person asked about.
+
+**Rules for next time.**
+
+- A session's time splits three ways: the agent working, the agent idle on its subagents, and
+  the agent blocked on the person. Report the first two; the third only when the person asks.

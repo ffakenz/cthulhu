@@ -16,8 +16,8 @@ paraphrases an external brief or specification: refer to it by a neutral name on
 One file per ticket, named for the ticket, not for the fix. The file outlives the branch —
 it is where the next session learns what was already ruled out.
 
-Phases are checkable and carry their evidence. `- [x]` means a command was run and its output
-supported the claim; it does not mean the code was written. State the command.
+Phases are checkable. A tick is a plain `- [x]`: the phase is done and committed, and the commit
+is its evidence.
 
 When the work closes, add a **Review** section: what the framing got wrong, what turned out to
 be narrower or wider than the brief, and what was deliberately not done. That section is the
@@ -25,7 +25,7 @@ part anyone reads six months later.
 
 ## lessons.md
 
-Append after any correction. Three headings, in order: **What happened**, **What I got wrong**
+Append when the work closes, one entry per correction. Three headings, in order: **What happened**, **What I got wrong**
 (numbered), **Rules for next time**. A lesson that does not end in a rule is a diary entry.
 
 Durable lessons about *how to work* graduate out of here into `.claude/skills/`. Keep in

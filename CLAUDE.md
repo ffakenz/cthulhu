@@ -2,7 +2,8 @@
 
 Conventions for working in this repository — the single source of truth for how work is done
 here. Decisions live in `docs/adr/` (architecture) and `docs/design/` (how the engine treats its
-input).
+input). Where a plugin skill (superpowers' included) or a user-level instruction prescribes a
+different process, these conventions take precedence.
 
 ## Project
 
@@ -215,7 +216,7 @@ external brief or specification: refer to it by a neutral name only.
 - `tasks/<name>-plan.md` — a closed plan, kept verbatim before the next piece of work replaces
   `todo.md`; every reference that named it as `todo.md`, quoted prompts aside, names this file.
 - `tasks/<ticket>.md` — one ticket, copied from `tasks/TEMPLATE.md`.
-- `tasks/lessons.md` — append an entry after any correction.
+- `tasks/lessons.md` — an entry for each correction, appended when the work closes.
 - `docs/prompts/NNNN-kebab-case-title.md` — one prompt history per working session, written
   with the `prompt-history` skill.
 
@@ -236,10 +237,18 @@ Skills live in `.claude/skills/<name>/SKILL.md`; the agent in `.claude/agents/co
 | `architecture-decisions` | Making, reversing or looking up an architecture decision; starting a record |
 | `review-and-planning` | Resolving review comments, reviewing a diff, planning a multi-step change, proposing a dependency, writing a test that must fail first |
 | `prompt-history` | Closing a working session: recording its prompts in `docs/prompts/` |
-| `code-reviewer` (agent) | After implementing a change, before committing |
+| `code-reviewer` (agent) | Once per branch, when its work is done: the whole branch |
 
 ## Working style
 
 - Incremental and small: focused changes, clarity over cleverness.
 - Decide → record the decision → implement.
-- Keep this file, the decision records and `README.md` in sync.
+- Build, then align. The plan in `tasks/todo.md` names the goal, the files, the interfaces, the
+  tests and the commits, never their code. Once approved it is carried out to the end without
+  stopping to re-plan: a deviation is one line added to the plan, not a rewrite of it, and a tick
+  is a plain checkbox.
+- One review per branch, when its work is done. Blockers and should-fixes are fixed in new
+  commits, and only a blocker's fix is reviewed again; nits are listed in the hand-off for a
+  person to choose. A plan is reviewed by a subagent only when a person asks.
+- Bookkeeping happens once, when the work closes: lessons, the prompt history, memory, and
+  keeping this file, the decision records and `README.md` in sync.

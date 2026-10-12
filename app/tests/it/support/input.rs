@@ -370,23 +370,37 @@ fn zero(whole: usize, decimals: usize) -> String {
     "0".repeat(whole) + &fraction
 }
 
-/// Text an amount refuses, with why: zero, more than four decimals, 10^15 or more, or not digits
-/// with an optional fraction. None of it is empty, padded or holds a comma, so a CSV field carries
-/// it as it is.
-pub(crate) fn any_refused_amount() -> impl Strategy<Value = (String, AmountError)> {
+/// Digits an amount refuses, with why: zero, more than four decimals, or 10^15 or more. More than
+/// four decimals is drawn on whole parts of any size, since that refusal comes before 10^15 or
+/// more.
+fn any_out_of_bounds() -> impl Strategy<Value = (String, AmountError)> {
+    let any_whole = prop_oneof![0..TOO_LARGE, TOO_LARGE..=u64::MAX];
     prop_oneof![
         (1..=3_usize, 0..=5_usize)
             .prop_map(|(whole, decimals)| (zero(whole, decimals), AmountError::Zero)),
-        (any_money(), 1..=9_u8).prop_map(|(money, digit)| (
-            format!("{}{digit}", money.text()),
+        (any_whole, 0..=9_999_u16, 1..=9_u8).prop_map(|(whole, fraction, digit)| (
+            format!("{whole}.{fraction:04}{digit}"),
             AmountError::TooPrecise
         )),
         (TOO_LARGE..=u64::MAX, 0..=9_999_u16).prop_map(|(whole, fraction)| (
             format!("{whole}.{fraction:04}"),
             AmountError::TooLarge
         )),
-        (any_money(), select(&BREAKS)).prop_map(|(money, (before, after))| {
-            (format!("{before}{}{after}", money.spelled(0, 0)), AmountError::Malformed)
+    ]
+}
+
+/// Text an amount refuses, with why: zero, more than four decimals, 10^15 or more, or not digits
+/// with an optional fraction, which comes first and so breaks refused digits as well as valid
+/// ones. None of it is empty, padded or holds a comma, so a CSV field carries it as it is.
+pub(crate) fn any_refused_amount() -> impl Strategy<Value = (String, AmountError)> {
+    let any_digits = prop_oneof![
+        any_money().prop_map(|money| money.spelled(0, 0)),
+        any_out_of_bounds().prop_map(|(text, _)| text)
+    ];
+    prop_oneof![
+        any_out_of_bounds(),
+        (any_digits, select(&BREAKS)).prop_map(|(text, (before, after))| {
+            (format!("{before}{text}{after}"), AmountError::Malformed)
         }),
     ]
 }

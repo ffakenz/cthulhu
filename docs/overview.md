@@ -147,7 +147,9 @@ accounts.
 
 ## Laws
 
-Every runtime keeps these; each is a property test.
+Every runtime keeps these. No test computes what a run should give: the laws compare runs of the
+engine with each other, after any generated input, and fixtures through the binary pin the
+numbers (*Correctness defined by equations between runs*).
 
 1. `held` equals the sum of the client's `Disputed` deposits, and is never negative.
 2. `total` equals deposited minus withdrawn minus charged back.
@@ -156,4 +158,5 @@ Every runtime keeps these; each is a property test.
 5. A repeated deposit or withdrawal row changes no balance.
 6. Only `Held` makes `available` negative.
 7. Reordering rows of different clients changes no account, given unique tx ids.
-8. The engine agrees with a naive model on every generated input.
+8. After any input, inputs that the rules make equivalent leave the same accounts. For example, a
+   deposit disputed and then resolved leaves the same accounts as the same deposit alone.

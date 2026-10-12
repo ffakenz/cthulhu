@@ -57,6 +57,13 @@ generated spellings, near-misses included: every spelling that parses re-renders
   `FromStr`, never a test-only constructor, so every counterexample, shrunk or not, is a value
   production can receive. Keep sizes small (a few characters, a dozen steps): shrinking is faster
   and the counterexample shorter.
+- **One generator per field, composed into the input.** Each field draws its value from its whole
+  domain and its spelling from every form the input admits, and a line composes the fields.
+  Failure has generators of its own: a flaw per field, composed with valid fields, makes a
+  malformed input that knows how it must fail.
+- **A property checks success or failure, never both.** Valid input comes from the valid
+  generators and malformed input from the flaws, so a law that branches on the outcome it is
+  checking is two laws.
 - **Bias the strategy toward the edges.** `prop_oneof![3 => ordinary, 1 => edge]` sends one draw
   in four to an edge: zero, empty, `MAX` and one past it, the status just before a terminal one.
   Uniform draws over a `u32` reach zero about once in four billion. List first the arm a

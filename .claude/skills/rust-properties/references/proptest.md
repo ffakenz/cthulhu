@@ -1,7 +1,7 @@
 # Properties on proptest
 
 How every property in this repo runs: `support::for_all` over proptest's `TestRunner`, the
-strategies in `app/tests/it/support/generate.rs`, and the regression files proptest saves.
+generators in `app/tests/it/support/input.rs`, and the regression files proptest saves.
 [SKILL.md](../SKILL.md) says which laws to assert and where to aim the strategies; this file is
 the code, and how to drive it.
 
@@ -199,8 +199,8 @@ fn rows() -> impl Strategy<Value = Vec<Row>> {
   deposit, each `prop_oneof!` toward its first arm. A dispute drawn before any deposit builds a
   deposit instead, so no draw is invalid.
 - `Index::index` panics on an empty collection; `pick` checks first.
-- `generate::rows` builds a run the same way: an ordinary draw or one of seven edge draws,
-  interpreted by its `Draft` while the run holds fewer rows than draws.
+- The engine's laws need no picks. `support::input` draws each field from a small domain, so
+  repeats and collisions come up without being built, and the laws compare runs with each other.
 
 ## Driving a state machine
 

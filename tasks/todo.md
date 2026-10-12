@@ -132,7 +132,7 @@ suite.
       stage 1 and command-line plans is run against the new suite. Each must fail a test, or fail
       `make lint` for the `.expect` break. If a break escapes, the strategy is fixed or a pair is
       added; a law is never weakened.
-- [ ] **4.** The docs:
+- [x] **4.** The docs:
       - the overview's Laws, the architecture, the patterns and the roadmap;
       - `README.md` and `CLAUDE.md`;
       - the two skill references to the test crate.

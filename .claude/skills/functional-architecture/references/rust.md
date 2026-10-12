@@ -391,8 +391,8 @@ decision record ([[architecture-decisions]]).
   `Command::new(env!("CARGO_BIN_EXE_cthulhu"))`, or `engine`'s entry point, `run`, with in-memory
   ports.
 - **One test crate.** Cargo builds each file directly under `tests/` as a separate crate, so the
-  tests live in one: `app/tests/it/main.rs`, with a module per library module (`it/order.rs`
-  tests the module `order`, whichever package holds it) and shared helpers in `it/support.rs`.
+  tests live in one: `app/tests/it/main.rs`, with a module per surface the tests drive (`it/run.rs`
+  drives the runtime, `it/cli.rs` the binary) and shared helpers in `it/support.rs`.
 - **Unit tests only for pure folds** that are awkward to reach from outside (a `decide`, a
   `disposition`, a parser's edge), in a `#[cfg(test)] mod tests` beside the code.
 - **Names state the behaviour:** `refuses_a_quantity_with_a_leading_zero`, never `test_parse_2`.

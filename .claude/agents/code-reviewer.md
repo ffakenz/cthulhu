@@ -27,11 +27,14 @@ Check, in this order:
    `saturating_` or `wrapping_`, or takes a type that rules the case out. The lint gate catches
    most partial calls; look for what it cannot see: `assert!` in production code, unchecked
    arithmetic, a signature that admits inputs its body cannot honour.
-2. **Architecture.** Logic lives in the library, the functional core. Effects reach it only
-   through ports or as values passed in. `backend/src/main.rs` is the composition root: the only
-   place a concrete adapter, the clock, the environment, the arguments or stdio is touched, and
-   the only file under `backend/src` that carries `#[expect(clippy::disallowed_methods, …)]`. A
-   port's trait is declared beside its consumer. Each boundary has one error enum, never shared.
+2. **Architecture.** Logic lives in `engine`, the functional core, whose manifest names no other
+   package of the workspace and no format's crate, and is the only one that names
+   `rust_decimal`; `store` names `engine` and no other package of the workspace, and `backend`
+   names both. Effects reach the core only through ports or as values passed in.
+   `backend/src/main.rs` is the composition root: the only place a concrete adapter, the clock,
+   the environment, the arguments or stdio is touched, and the only file under `backend/src` or
+   `libs/` that carries `#[expect(clippy::disallowed_methods, …)]`. A port's trait is declared
+   beside its consumer. Each boundary has one error enum, never shared.
 3. **Domain model.** Every domain name comes from `docs/overview.md` § Terms or a record. Each
    domain type is a value, an entity or a message, with its fields private and its readings as
    methods. No value carries the key it is stored under, nothing that could be derived is stored,
@@ -54,8 +57,9 @@ Check, in this order:
    says what the code is and how it behaves; decisions, alternatives, trade-offs, plans and
    record numbers stay out. Names and types carry the meaning. No dead code.
 
-A package in the build graph (`cargo tree`, every dependency kind) that no decision record admits
-is a blocker on its own: a dependency needs a person's approval and a decision record first.
+A package in the build graph (`cargo tree`, every dependency kind) that is neither a workspace
+member nor an admitted crate is a blocker on its own: a dependency needs a person's approval and a
+decision record first.
 `Cargo.lock` also lists optional crates that are never built; those are not dependencies.
 
 Report:

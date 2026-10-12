@@ -1,7 +1,7 @@
 //! Laws of the domain's money: amounts parse exactly as the grammar admits them, and balances
 //! print their exact value.
 
-use backend::domain::{Amount, AmountError, Balance};
+use engine::domain::{Amount, AmountError, Balance};
 
 use crate::support;
 use crate::support::generate::{self, AmountValue, Direction};

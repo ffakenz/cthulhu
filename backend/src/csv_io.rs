@@ -7,10 +7,9 @@ use std::io::{Read, Write};
 use std::mem;
 
 use csv::{ErrorKind, ReaderBuilder, StringRecord, Trim, Writer};
+use engine::domain::{Address, Amount, ClientCommand, ClientId, Command, DisputeCommand, TxId};
+use engine::run::{Accounts, Row, RowError, SourceError};
 use serde::Deserialize;
-
-use crate::domain::{Address, Amount, ClientCommand, ClientId, Command, DisputeCommand, TxId};
-use crate::run::{Accounts, Row, RowError, SourceError};
 
 /// The columns every header names.
 const REQUIRED: [&str; 3] = ["type", "client", "tx"];

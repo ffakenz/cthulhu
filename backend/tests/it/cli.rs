@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use backend::csv_io::SinkError;
-use backend::run::SourceError;
+use engine::run::SourceError;
 
 /// The overview, whose worked example is the contract's own.
 const OVERVIEW: &str = include_str!("../../../docs/overview.md");

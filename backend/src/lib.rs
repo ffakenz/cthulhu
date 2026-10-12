@@ -1,8 +1,4 @@
-//! Cthulhu's ledger engine, as a library.
+//! The command line's adapters: CSV in and out, and the report as text.
 
-pub mod core;
 pub mod csv_io;
-pub mod domain;
-pub mod memory;
-pub mod run;
 pub mod text_io;

@@ -245,8 +245,9 @@ adapter meets), and a match on them must end in a catch-all. It sits once, in th
 classifies the foreign error, under
 `#[expect(clippy::wildcard_enum_match_arm, reason = "io::ErrorKind is non_exhaustive")]`, and maps
 every kind it does not name to a variant that says so ([[rust-errors]]). Never put
-`#[non_exhaustive]` on our own enums: the binary and the test crate are separate crates from the
-library, and every match there would be forced into the catch-all this section bans.
+`#[non_exhaustive]` on our own enums: the packages, the binary and the test crate are separate
+crates, and every match outside an enum's own crate would be forced into the catch-all this
+section bans.
 
 ## 4. Ports and interpreters
 
@@ -375,20 +376,22 @@ impl Clock for SystemClock {
 
 **The compiler-checked form.** Review keeps logic modules free of adapters. When the core must
 never reach an adapter, the core becomes its own workspace crate with no dependency on the adapter
-crate: the import then does not resolve, and the layering is a build failure instead of a review
-finding. A workspace path crate is not a dependency, so `make deps` still passes; the split itself
-is a decision record ([[architecture-decisions]]).
+crates: the import then does not resolve, and the layering is a build failure instead of a review
+finding. Here that crate is `engine`, under `libs/`, and `store` and `backend` depend on it. A
+workspace path crate is not a dependency, so `make deps` still passes; the split itself is a
+decision record ([[architecture-decisions]]).
 
 ## 7. Tests
 
 - **Red first.** The failing test lands before the code that makes it pass.
 - **The black box is a compiler fact.** `backend/tests` is a separate crate that sees only the
-  library's public API, so it cannot pin a private function.
+  public APIs of `engine`, `store` and `backend`, so it cannot pin a private function.
 - **The backbone drives the real surface:** the binary through
-  `Command::new(env!("CARGO_BIN_EXE_cthulhu"))`, or the library's entry point with in-memory ports.
+  `Command::new(env!("CARGO_BIN_EXE_cthulhu"))`, or `engine`'s entry point, `run`, with in-memory
+  ports.
 - **One test crate.** Cargo builds each file directly under `tests/` as a separate crate, so the
-  tests live in one: `backend/tests/it/main.rs`, with a module per `src` module (`it/order.rs`
-  tests `src/order.rs`) and shared helpers in `it/support.rs`.
+  tests live in one: `backend/tests/it/main.rs`, with a module per library module (`it/order.rs`
+  tests the module `order`, whichever package holds it) and shared helpers in `it/support.rs`.
 - **Unit tests only for pure folds** that are awkward to reach from outside (a `decide`, a
   `disposition`, a parser's edge), in a `#[cfg(test)] mod tests` beside the code.
 - **Names state the behaviour:** `refuses_a_quantity_with_a_leading_zero`, never `test_parse_2`.

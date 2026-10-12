@@ -1,5 +1,5 @@
-//! Integration tests: one crate, with modules that mirror `src`, and `cli`, which drives the
-//! binary.
+//! Integration tests: one crate, with modules that mirror the modules of `engine`, `store` and
+//! `backend`, and `cli`, which drives the binary.
 
 mod support;
 

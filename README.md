@@ -7,7 +7,7 @@ values — are enforced by the compiler, the lint gate and review.
 
 ## Status
 
-The library and the command line are built: the domain model, the core, the sequential runtime,
+The libraries and the command line are built: the domain model, the core, the sequential runtime,
 the in-memory stores and the CSV adapters, each held to its laws, and the report's text adapter,
 held to the binary's fixtures. The `cthulhu` binary turns an input file into the accounts table.
 The benchmarks are next.
@@ -70,19 +70,26 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 
 ```text
 .
-├── backend/              the crate: the library and the `cthulhu` binary
+├── backend/              package `backend`: the adapters and the `cthulhu` binary
 │   ├── src/
-│   │   ├── lib.rs        the library: core, runtime and adapters
-│   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── lib.rs        the library: the CSV and text adapters
 │   │   ├── csv_io.rs     the CSV adapters
-│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
-│   │   ├── domain/       ids, money, accounts and deposits, commands and events
-│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
-│   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
-│   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, strategies and the model
+├── libs/
+│   ├── engine/           package `engine`: the domain, the decider and the runtime
+│   │   └── src/
+│   │       ├── lib.rs    the library: the functional core
+│   │       ├── core.rs   the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │       ├── domain.rs the domain model: re-exports every type of `domain/`
+│   │       ├── domain/   ids, money, accounts and deposits, commands and events
+│   │       ├── run.rs    the runtime: `run`; re-exports every type of `run/`
+│   │       └── run/      the store ports, rows and run errors, the summary views
+│   └── store/            package `store`: the stores behind the engine's ports
+│       └── src/
+│           ├── lib.rs    the library: the stores
+│           └── memory.rs the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 ├── docs/
 │   ├── overview.md       what the engine does
 │   ├── architecture.md   a picture of the architecture decisions

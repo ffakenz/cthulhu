@@ -72,7 +72,7 @@ The person signed off this plan as written.
     environment snapshot is one `main` will take, not one it takes now. Its ten nits are taken
     too.
   - Commit `docs(tasks): plan the workspace packages and keep the sample input's plan`.
-- [ ] **1.** The three records, drafted together and shown to the person. On sign-off each is
+- [x] **1.** The three records, drafted together and shown to the person. On sign-off each is
       `Accepted` and committed alone with its index line:
   - *Layers as packages that depend inward*, committed as
     `docs(adr): record layers as packages that depend inward`
@@ -81,7 +81,21 @@ The person signed off this plan as written.
     `docs(adr): record csv, serde, rust_decimal, thiserror, clap, proptest and rand as dependencies`
   - *The command-line contract with help and version*, with the superseded record's Status line,
     committed as `docs(design): record the command-line contract with help and version`
-- [ ] **2.** The split, a refactor.
+  - The code-reviewer read the three drafts before the sign-off and found two blockers, both
+    fixed: `engine` is kept off the crates behind a format, not off every crate an adapter uses,
+    since `thiserror` serves both; and only the help, the version and the usage lines promise the
+    name `cthulhu`, since clap's message for an empty path names no program. Its five
+    should-fixes and fourteen nits are taken.
+  - The crate sets were resolved in a throwaway project outside the repository, on the pinned
+    toolchain: the program's 24 crates and the dev targets' 14 match the dependency record name
+    for name, with one `syn`.
+  - The person signed off all three. Per-commit gate: `make ci` green, 39 passed and 1 ignored,
+    once for the three, since none touches code; the name greps and the record scan are silent
+    for each.
+  - Commits `3981bf7`, `663c067` and `09718e2`.
+  - Task 4, red, gained two cases after the sign-off, an unknown flag and a renamed copy of the
+    binary, because the signed design record decides both.
+- [x] **2.** The split, a refactor.
   - `libs/engine` and `libs/store`, each a manifest and a `lib.rs`. Each manifest takes the shared
     `[workspace.package]` fields and `[lints] workspace = true`; `engine` names `rust_decimal`
     with `default-features = false` and `std`, and `store` names `engine`. `git mv` moves
@@ -97,9 +111,31 @@ The person signed off this plan as written.
     `.claude/agents/code-reviewer.md`, and the skills whose checks or examples name `backend/src`
     or `backend::`.
   - Evidence that nothing changed: `git diff --cached -M --summary` shows the engine's files
-    renamed whole; `git diff --cached -M -- libs/store/src/memory.rs` shows only `use` lines; each
-    new manifest holds `[lints] workspace = true`; and the tests give 39 passed and 1 ignored, as
-    before, with only their `use` lines changed.
+    renamed whole; the rename diff of `memory.rs` shows only `use` lines; each new manifest holds
+    `[lints] workspace = true`; and the tests give 39 passed and 1 ignored, as before, with only
+    their `use` lines changed.
+    - Run: the summary lists the eleven files of `engine` renamed at 100% and `memory.rs` at 92%;
+      `git diff --cached -M -- backend/src/memory.rs libs/store/src/memory.rs` shows its two `use`
+      lines and nothing else. With one path only, git shows the file as new.
+    - `cargo update --workspace` changed the lock by 16 lines added and 1 removed: the `engine`
+      and `store` entries, and `backend`'s list; no version moved.
+    - `make ci` green: 39 passed and 1 ignored.
+  - The layering holds: a probe `use store::memory::MemoryLedger;` added to `engine`'s `run.rs`
+    failed `cargo build --workspace --locked` with E0433, "use of unresolved module or unlinked
+    crate `store`", and was removed.
+  - The greps: no `backend::core`, `domain`, `run` or `memory` path is left; no `crate::` path
+    names them outside `engine`; `rust_decimal` is named only in `engine`'s manifest and in
+    `money.rs`; `disallowed_methods` only in `main.rs`. `cargo tree --workspace --depth 0` lists
+    `backend`, `engine` and `store`.
+  - Once, from the root, with the person's consent: `cargo run -- transactions.csv` exits 0, its
+    stdout equals the sample's table byte for byte, and stderr holds cargo's two lines, then the
+    sample's report. No test runs a bare `cargo run`.
+  - The code-reviewer found no blocker. Its should-fix is taken: the reviewer agent's architecture
+    check names `engine`'s manifest as free of other workspace packages and formats' crates, not
+    of every crate, since `thiserror` joins it next. Its nits are taken too: "of the workspace"
+    where a package names no other; "the libraries" for the old single library; the wiring
+    skill's sketch no longer places a library that names an adapter's error in `engine`; two
+    lines back within 100 columns; this tick; and the renamed-copy test's red.
   - Commit `refactor(workspace): split the library into engine, store and backend packages`.
 - [ ] **3.** `thiserror`, a refactor.
   - `thiserror = "2.0.21"` in `engine` and `backend`; the derives and their `#[error]` attributes,
@@ -110,9 +146,12 @@ The person signed off this plan as written.
     error value's `to_string()` before and after, and the two outputs are identical.
   - Commit `refactor(errors): derive Display and Error with thiserror`.
 - [ ] **4, red.** In `backend/tests/it/cli.rs`, `a_wrong_argument_count_is_a_usage_error`, which
-      pins today's one-line usage, is rewritten to clap's messages for no argument and for two.
-      New tests pin the help and version flags, an empty argument, a path after `--`, and a help
-      that cannot be written. Each fails against today's binary, and nothing else fails.
+      pins today's one-line usage, is rewritten to clap's messages for no argument, for two and
+      for an unknown flag. New tests pin the help and version flags, an empty argument, a path
+      after `--`, a help that cannot be written, and clap's whole usage error from a copy of the
+      binary under another name, which must still name `cthulhu`, as the signed record decides;
+      the wrong implementation it rejects is clap taking the program's name from its path. Each
+      fails against today's binary, and nothing else fails.
   - Commit `test(cli): pin the help, the version and clap's usage errors`.
 - [ ] **4, green.** `clap` 4.6.7 in `backend`, and `ADMITTED` gains `clap`, `clap_builder`,
       `clap_derive`, `clap_lex`, `anstyle` and `heck`. `main.rs` parses with `try_parse_from` and

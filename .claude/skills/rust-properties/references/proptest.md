@@ -62,7 +62,7 @@ Both round trips of the `Quantity` parser in
 
 ```rust,ignore
 mod quantity {
-    use backend::{Quantity, QuantityError};
+    use engine::{Quantity, QuantityError};
     use proptest::arbitrary::any;
     use proptest::collection::vec;
     use proptest::prop_oneof;
@@ -212,7 +212,7 @@ is. The driver is another module of `backend/tests/it/main.rs`:
 
 ```rust,ignore
 mod status_machine {
-    use backend::{Status, Step};
+    use engine::{Status, Step};
     use proptest::collection::vec;
     use proptest::sample::select;
 

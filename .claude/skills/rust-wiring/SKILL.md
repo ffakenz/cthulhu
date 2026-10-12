@@ -101,10 +101,10 @@ fn boot(vars: VarsOs) -> Result<(), RunError> {
     let open_journal = |journal: &JournalConfig| {
         Journal::open(journal).map(|live| Metered::new(Retrying::new(live, config.attempts)))
     };
-    backend::run(&config, open_journal)
+    run(&config, open_journal)
 }
 
-// backend/src/lib.rs: generic over the port; the factory runs only when a journal is configured.
+// The library: generic over the port; the factory runs only when a journal is configured.
 pub fn run<J, F>(config: &Config, open_journal: F) -> Result<(), RunError>
 where
     J: OrderWriter,
@@ -133,8 +133,8 @@ std::env::set_var("CTHULHU_JOURNAL", "orders.journal");
 ## Verify
 
 ```sh
-make lint                                    # the disallowed-methods gate holds everywhere else
-git grep -n 'disallowed_methods' backend/src # lists backend/src/main.rs and nothing else
+make lint                                         # the disallowed-methods gate holds elsewhere
+git grep -n 'disallowed_methods' backend/src libs # lists backend/src/main.rs and nothing else
 ```
 
 A boot test calls `run` with a closure for `Journal::open` and a configuration that needs a

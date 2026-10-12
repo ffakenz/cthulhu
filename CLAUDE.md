@@ -11,7 +11,7 @@ the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-The library and the command line are built: the domain, the core, the sequential runtime, the
+The libraries and the command line are built: the domain, the core, the sequential runtime, the
 in-memory stores and the CSV adapters, each held to its laws, and the report's text adapter, held
 to the binary's fixtures; `make run INPUT=<file>` turns an input file into the accounts table. The benchmarks are next. The workspace, its gate
 (`make ci`), these conventions, the decision log, the knowledge base and the engine's design
@@ -30,19 +30,26 @@ cthulhu/
 ├── README.md             setup and usage
 ├── CLAUDE.md             this file
 ├── transactions.csv      a sample input: `cargo run -- transactions.csv`
-├── backend/              package `backend`, binary `cthulhu`
+├── backend/              package `backend`: the adapters and the binary `cthulhu`
 │   ├── src/
-│   │   ├── lib.rs        the library: core, runtime and adapters
-│   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── lib.rs        the library: the CSV and text adapters
 │   │   ├── csv_io.rs     the CSV adapters
-│   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
-│   │   ├── domain/       ids, money, accounts and deposits, commands and events
-│   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
-│   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
-│   │   ├── run/          the store ports, rows and run errors, the summary views
 │   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, strategies and the model
+├── libs/
+│   ├── engine/           package `engine`: the domain, the decider and the runtime
+│   │   └── src/
+│   │       ├── lib.rs    the library: the functional core
+│   │       ├── core.rs   the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │       ├── domain.rs the domain model: re-exports every type of `domain/`
+│   │       ├── domain/   ids, money, accounts and deposits, commands and events
+│   │       ├── run.rs    the runtime: `run`; re-exports every type of `run/`
+│   │       └── run/      the store ports, rows and run errors, the summary views
+│   └── store/            package `store`: the stores behind the engine's ports
+│       └── src/
+│           ├── lib.rs    the library: the stores
+│           └── memory.rs the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 ├── docs/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
@@ -56,10 +63,12 @@ cthulhu/
 └── .claude/              settings.json, agents/code-reviewer.md, skills/ (see Skills and agents)
 ```
 
-The library holds the functional core (logic modules that reach effects only through ports) and the
-adapter modules that implement those ports. `main.rs` is the composition root: the only production
-code that constructs an adapter or touches the clock, the environment, the arguments or stdio;
-everything it builds is passed down as a value.
+`engine` holds the functional core: logic modules that reach effects only through ports. `store`
+and the library in `backend` hold the adapters that implement those ports. Dependencies point
+inward: `backend` depends on `store` and `engine`, `store` on `engine`, and `engine` on no other
+package of the workspace, so a core module that imports an adapter does not build. `main.rs` is
+the composition root: the only production code that constructs an adapter or touches the clock,
+the environment, the arguments or stdio; everything it builds is passed down as a value.
 
 ## Engineering principles
 
@@ -167,12 +176,13 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - Fixtures and stubs live beside the test, not in its body; the test body stays the behaviours
   under test.
 - Nothing in production code may exist only for testing.
-- Black-box tests live in `backend/tests/it` and see only the public API: one test crate,
-  `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
-  each law on `proptest`, the strategies in `support/generate.rs`, the rows spelled as CSV text
-  in `support/spelling.rs` and the naive model in `support/model.rs`. `cli.rs` drives the binary
-  through `CARGO_BIN_EXE_cthulhu`, each fixture's input written into `CARGO_TARGET_TMPDIR`, except
-  the sample input, which the binary reads from the repository root.
+- Black-box tests live in `backend/tests/it` and see only the public APIs of `engine`, `store` and
+  `backend`: one test crate, `main.rs` plus modules that mirror the libraries' modules, and
+  `support.rs` for helpers: `for_all`, which runs each law on `proptest`, the strategies in
+  `support/generate.rs`, the rows spelled as CSV text in `support/spelling.rs` and the naive model
+  in `support/model.rs`. `cli.rs` drives the binary through `CARGO_BIN_EXE_cthulhu`, each fixture's
+  input written into `CARGO_TARGET_TMPDIR`, except the sample input, which the binary reads from
+  the repository root.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments

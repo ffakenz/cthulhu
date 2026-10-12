@@ -11,8 +11,9 @@ path = "src/main.rs"
 
 [dependencies]
 csv = "1.4"
-rust_decimal = { version = "1", default-features = false, features = ["std"] }
+engine = { path = "../libs/engine" }
 serde = { version = "1", features = ["derive"] }
+store = { path = "../libs/store" }
 
 [dev-dependencies]
 proptest = { version = "1.12", default-features = false, features = ["std"] }

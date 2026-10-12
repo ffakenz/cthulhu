@@ -2,11 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use backend::domain::{
+use engine::domain::{
     Address, Amount, ClientCommand, ClientEvent, ClientId, Command, DisputeCommand, DisputeEvent,
     Event, TxId,
 };
-use backend::run::{Row, RowError};
+use engine::run::{Row, RowError};
 use proptest::arbitrary::any;
 use proptest::collection::{SizeRange, vec};
 use proptest::option;

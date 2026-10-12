@@ -3,10 +3,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use backend::core::{decide_client, decide_dispute, evolve, open};
-use backend::domain::DisputeCommand::{Chargeback, Dispute, Resolve};
-use backend::domain::Status::{Disputed, Settled};
-use backend::domain::{
+use engine::core::{decide_client, decide_dispute, evolve, open};
+use engine::domain::DisputeCommand::{Chargeback, Dispute, Resolve};
+use engine::domain::Status::{Disputed, Settled};
+use engine::domain::{
     Account, Address, Amount, Balance, ClientCommand, ClientEvent, ClientId, ClientReason, Command,
     Deposit, DisputeCommand, DisputeEvent, DisputeReason, Event, Footprint, Reason, Sight, Status,
     TxId,

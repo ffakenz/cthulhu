@@ -9,10 +9,10 @@ use std::convert::Infallible;
 use std::fmt;
 use std::panic::Location;
 
-use backend::memory::{MemoryLedger, MemorySeenIds};
-use backend::run::{Row, RunError, SourceError, Summary, run};
+use engine::run::{Row, RunError, SourceError, Summary, run};
 use proptest::strategy::Strategy;
 use proptest::test_runner::{Config, TestCaseError, TestError, TestRunner, contextualize_config};
+use store::memory::{MemoryLedger, MemorySeenIds};
 
 /// How many inputs each law is checked on, unless `PROPTEST_CASES` says otherwise.
 const CASES: u32 = 500;

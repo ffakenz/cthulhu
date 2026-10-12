@@ -85,42 +85,48 @@ one partition, and the reference that every later runtime must equal.
 
 ## Modules
 
+*A pure core*, *Effects behind ports*, *Layers as packages that depend inward*.
+
 ```text
 ┌────────────────────────────────────────────────────────────────┐
-│ main.rs  composition root: argument, file, stdio, exit code    │
-├───────────────────────────────┬────────────────────────────────┤
-│ csv_io   CsvSource,           │ memory   MemoryLedger,         │
-│          render_csv,          │          MemorySeenIds         │
-│          SinkError            │ text_io  render_report         │
-│          (csv, serde)         │                                │
-├───────────────────────────────┴────────────────────────────────┤
-│ run      the runtime; ports: source, LedgerStore, SeenIds;     │
-│          Row, RowError, SourceError, RunError, Summary,        │
-│          Accounts, Report                                      │
+│ backend                                                        │
+│   main.rs  composition root: argument, file, stdio, exit code  │
+│   csv_io   CsvSource, render_csv, SinkError                    │
+│            (csv, serde)                                        │
+│   text_io  render_report                                       │
 ├────────────────────────────────────────────────────────────────┤
-│ core     open, decide_client, decide_dispute, evolve: pure,    │
-│          total; Overflow, evolve's one failure                 │
+│ store                                                          │
+│   memory   MemoryLedger, MemorySeenIds                         │
 ├────────────────────────────────────────────────────────────────┤
-│ domain   ids, Address, Amount, Balance, Account, Lock,         │
-│          Deposit, Status, Footprint, commands, events,         │
-│          reasons, Sight                                        │
-│          (rust_decimal)                                        │
+│ engine                                                         │
+│   run      the runtime; ports: source, LedgerStore, SeenIds;   │
+│            Row, RowError, SourceError, RunError, Summary,      │
+│            Accounts, Report                                    │
+│   core     open, decide_client, decide_dispute, evolve: pure,  │
+│            total; Overflow, evolve's one failure               │
+│   domain   ids, Address, Amount, Balance, Account, Lock,       │
+│            Deposit, Status, Footprint, commands, events,       │
+│            reasons, Sight                                      │
+│            (rust_decimal)                                      │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 Each layer uses only the layers below it: `memory` implements the ports `run` declares, `csv_io`
 implements the source over `Read` and renders the table onto `Write`, `text_io` renders the report
-onto `Write`, and only `main.rs` touches the world.
+onto `Write`, and only `main.rs` touches the world. Each band is a package, and the compiler holds
+the direction between them: `backend` depends on `store` and `engine`, `store` on `engine`, and
+`engine` on no other package of the workspace, so a module of `engine` that imports an adapter
+does not build.
 
-| Module | Holds | Uses |
-|---|---|---|
-| `domain` | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` | `rust_decimal` |
-| `core` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
-| `run` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
-| `memory` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
-| `csv_io` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `domain`, `run` |
-| `text_io` | `render_report` | `domain`, `run` |
-| `main.rs` | the argument, the input file, stdio, `ExitCode` | the library |
+| Module | Package | Holds | Uses |
+|---|---|---|---|
+| `domain` | `engine` | `ClientId`, `TxId`, `Address`, `Amount`, `AmountError`, `Balance`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`, `ClientCommand`, `DisputeCommand`, `Command`, `Event`, `ClientEvent`, `DisputeEvent`, `Reason`, `ClientReason`, `DisputeReason`, `Sight` | `rust_decimal` |
+| `core` | `engine` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
+| `run` | `engine` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
+| `memory` | `store` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
+| `csv_io` | `backend` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `domain`, `run` |
+| `text_io` | `backend` | `render_report` | `domain`, `run` |
+| `main.rs` | `backend` | the argument, the input file, stdio, `ExitCode` | `csv_io`, `text_io`, `memory`, `run` |
 
 - `domain` is the model in the records' terms: values, entities and messages, each entity reached
   by its key (*A domain model in the records' language*, *Entities identified by their keys*).

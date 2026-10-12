@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use backend::csv_io::{CsvSource, SinkError, render_csv};
-use backend::memory::{MemoryLedger, MemorySeenIds};
-use backend::run::{RunError, run};
 use backend::text_io::render_report;
+use engine::run::{RunError, run};
+use store::memory::{MemoryLedger, MemorySeenIds};
 
 /// Runs the input the arguments name. A failure's line goes to stderr, and its exit status is
 /// returned whether or not that line could be written.

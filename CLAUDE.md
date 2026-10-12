@@ -2,8 +2,9 @@
 
 Conventions for working in this repository — the single source of truth for how work is done
 here. Decisions live in `docs/adr/` (architecture) and `docs/design/` (how the engine treats its
-input). Where a plugin skill (superpowers' included) or a user-level instruction prescribes a
-different process, these conventions take precedence.
+input). Where a plugin skill (superpowers' included) or the user-level `CLAUDE.md` prescribes a
+different process, these conventions take precedence; a person's request in the session still
+outranks them.
 
 ## Project
 
@@ -246,9 +247,10 @@ Skills live in `.claude/skills/<name>/SKILL.md`; the agent in `.claude/agents/co
 - Build, then align. The plan in `tasks/todo.md` names the goal, the files, the interfaces, the
   tests and the commits, never their code. Once approved it is carried out to the end without
   stopping to re-plan: a deviation is one line added to the plan, not a rewrite of it, and a tick
-  is a plain checkbox.
-- One review per branch, when its work is done. Blockers and should-fixes are fixed in new
-  commits, and only a blocker's fix is reviewed again; nits are listed in the hand-off for a
-  person to choose. A plan is reviewed by a subagent only when a person asks.
+  is a plain checkbox. A step that needs a person's consent still waits for it.
+- One `code-reviewer` run per branch, when its work is done. Blockers and should-fixes are fixed
+  in new commits, and only a blocker's fix is reviewed again, on its own commits; nits are listed
+  in the hand-off for a person to choose. A plan is reviewed by a subagent only when a person
+  asks.
 - Bookkeeping happens once, when the work closes: lessons, the prompt history, memory, and
   keeping this file, the decision records and `README.md` in sync.

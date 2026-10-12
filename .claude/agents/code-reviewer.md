@@ -20,7 +20,8 @@ Before judging anything:
 2. Run `make ci` and read the output, not just the exit code. A failure is a blocker, except a
    red commit's new test failing for the reason it states.
 3. Read the whole branch against `main` (`git diff main...HEAD`), plus anything staged or
-   unstaged; read the `Cargo.lock` diff on its own.
+   unstaged — or, to re-review a blocker's fix, only the commits named; read the `Cargo.lock`
+   diff on its own.
 
 Check, in this order:
 

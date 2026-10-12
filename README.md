@@ -47,7 +47,7 @@ cargo run -- transactions.csv > output.csv
 
 `transactions.csv`, at the repository root, is a sample input: four clients, every command, a
 chargeback that leaves an account negative and locked, a dispute still open, and five refused
-commands, which the report counts on stderr. A fixture in `backend/tests/it/cli.rs` pins its
+commands, which the report counts on stderr. A fixture in `app/tests/it/cli.rs` pins its
 table and report, so `make ci` fails when the file changes and that fixture does not.
 
 The accounts table goes to stdout, written only once the run succeeds. The counts of rejected
@@ -75,7 +75,7 @@ streams and the exit status; [docs/overview.md](docs/overview.md) gives the form
 
 ```text
 .
-├── backend/              package `backend`: the adapters and the `cthulhu` binary
+├── app/                  package `app`: the adapters and the `cthulhu` binary
 │   ├── src/
 │   │   ├── lib.rs        the library: the CSV and text adapters
 │   │   ├── csv_io.rs     the CSV adapters

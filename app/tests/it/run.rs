@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::num::NonZeroU64;
 
-use backend::csv_io::CsvSource;
+use app::csv_io::CsvSource;
 use engine::domain::{Account, Balance, ClientId, ClientReason, Command, Reason};
 use engine::run::{Row, RowError, RunError, SourceError, Summary};
 use proptest::arbitrary::any;

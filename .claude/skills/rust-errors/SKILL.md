@@ -127,9 +127,9 @@ assert_eq!(disposition(&RunError::Config(ConfigErrors(Vec::new())), 1, 5), Dispo
 
 ```sh
 make lint                                              # the partiality lints and wildcard_enum_match_arm
-git grep -nw 'ErrorKind' backend/src libs              # lists adapter modules only
-git grep -nE 'Box<dyn [a-z:]*Error' backend/src libs   # lists main.rs only
-git grep -nE '#\[(from|source)\]|transparent|\bsource:' -- backend/src libs   # lists nothing
+git grep -nw 'ErrorKind' app/src libs                  # lists adapter modules only
+git grep -nE 'Box<dyn [a-z:]*Error' app/src libs       # lists main.rs only
+git grep -nE '#\[(from|source)\]|transparent|\bsource:' -- app/src libs       # lists nothing
 ```
 
 Related: [[functional-architecture]] · [[rust-effects]] · [[rust-wiring]] · [[rust-resources]]

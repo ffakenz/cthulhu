@@ -15,7 +15,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use backend::csv_io::SinkError;
+use app::csv_io::SinkError;
 use engine::run::SourceError;
 
 /// The overview, whose worked example is the contract's own.

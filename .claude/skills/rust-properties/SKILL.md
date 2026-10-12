@@ -80,7 +80,7 @@ generated spellings, near-misses included: every spelling that parses re-renders
   collaborator is generated data, not a test double.
 - **A random seed per run; a failure is saved and replayed.** proptest seeds each run from the
   operating system. A failing case prints a `cc` line and is saved to
-  `backend/tests/proptest-regressions/<module>.txt`, which the next run replays first. Commit that
+  `app/tests/proptest-regressions/<module>.txt`, which the next run replays first. Commit that
   file with the fix of the failure it records, and never otherwise. Never pin `PROPTEST_RNG_SEED`
   in code, a `Makefile` line or CI: a pinned seed is one example.
 - **Names state the law.** Properties are `prop_<law>`

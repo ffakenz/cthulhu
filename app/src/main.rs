@@ -9,8 +9,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use backend::csv_io::{CsvSource, SinkError, render_csv};
-use backend::text_io::render_report;
+use app::csv_io::{CsvSource, SinkError, render_csv};
+use app::text_io::render_report;
 use clap::Parser;
 use engine::run::{RunError, run};
 use store::memory::{MemoryLedger, MemorySeenIds};

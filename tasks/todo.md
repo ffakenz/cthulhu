@@ -59,6 +59,13 @@ The person signed off this plan as written.
    first, with their evidence, and the one link that named it as `tasks/todo.md`, in prompt
    history 0006, names the new file.
 8. **Prompt history 0007**, with the prompt-history skill, committed alone.
+9. **The app is `app`.** Once the work above was done, the person found that `backend/` named
+   nothing it held: it holds the command line. It becomes `app/`, the package `app`, and `libs/`
+   stays: `backend` for the libraries fits the adapters as well as the stores, and would take the
+   name every earlier record gives the binary's package. *Libraries and an app as packages that
+   depend inward* supersedes *Layers as packages that depend inward*, and the branch keeps its
+   history. The prompt history's unpushed commit is taken back with a soft reset, its file then
+   unstaged, and committed again last, with this turn.
 
 ## Tasks
 
@@ -249,9 +256,36 @@ The person signed off this plan as written.
     taken too: the Review's wording on the packages, `Command`'s calls and the lock, the accepted
     record left as it was, the tests made Unix-only, this evidence, and `dev_only` in the Makefile.
   - Commit `chore(backend): add rand as a dev-dependency`.
-- [ ] **6.** Prompt history 0007, alone:
+- [x] **6.** The record *Libraries and an app as packages that depend inward*, shown to the
+      person and, on sign-off, `Accepted` and committed alone with its index line and the
+      superseded record's Status line:
+      `docs(adr): record libraries and an app as packages that depend inward`.
+  - The code-reviewer read the draft and the rename together, before the sign-off, and found one
+    blocker, fixed: the record's mapping now covers `backend/tests/proptest-regressions/`, which
+    the dependency record also names. Its four should-fixes are taken: reasons true to the
+    records in the Rejected and Consequences, the live citations of the superseded record moved
+    to the new one, the links in prompt history 0005 following the move, and a record commit
+    made by pathspec, so the staged moves stay out of it. Its three nits are taken too.
+  - The person signed it off. The name greps and the record scan are silent, and the commit holds
+    its three files only.
+  - Commit `51ad277`.
+- [x] **7.** The rename, a refactor (Decisions, item 9): `git mv backend app`; the package `app`
+      and the root `members`; `use backend::` becomes `use app::`; the lock; every live doc, skill
+      and the reviewer agent that names `backend`; the live citations of the superseded record;
+      and the three links in prompt history 0005 that pointed into `backend/src`. Accepted records
+      keep their words; the new record maps them.
+  - Run: the commit renames the sixteen files of `backend`: ten unchanged, and six edited only by
+    `use backend::` to `use app::`, the test crate's doc and the manifest's name; the root
+    `members` names `app`. `cargo update --workspace` only renames the lock's package and moves it
+    into order. `cargo tree --workspace --depth 0` lists `app`, `engine` and `store`.
+  - `make ci` green: 45 passed and 1 ignored. The trees keep their description column, the
+    architecture box its 66 columns, and the skills' Verify blocks their comment columns.
+  - Once, from the root, with the person's consent: `cargo run -- transactions.csv` exits 0, its
+    stdout the sample's table byte for byte, its report on stderr.
+  - Commit `refactor(workspace): rename the backend package to app`.
+- [ ] **8.** Prompt history 0007, alone:
       `docs(prompts): add prompt history 0007 (workspace packages and admitted crates)`.
-- [ ] **7.** Report what is on the branch. Landing is the person's.
+- [ ] **9.** Report what is on the branch. Landing is the person's.
 
 ## Per-commit gate
 
@@ -269,7 +303,7 @@ The person signed off this plan as written.
 - **The evaluation's premise needed a correction:** the other repository's `libs/` holds four
   crates, and its app is a fifth crate outside `libs/`; it has no `libs/app`. The split here keeps
   three packages: `engine` and `store`, named after that repository's and checked against the
-  records' terms, and `backend`, the app, under its own name.
+  records' terms, and the app, first under its old name, `backend`, then as `app`.
 - **What changed after the sign-off:**
   - Task 4, red, gained an unknown flag and a renamed binary, both decided by the signed design
     record.
@@ -278,6 +312,9 @@ The person signed off this plan as written.
   - `clippy.toml`'s clap entries grew from six to twelve, adding `Command`'s six calls, which the
     derive reaches through `CommandFactory`.
   - `make run` passes `--` before `INPUT`, so a path that begins with `-` still runs through it.
+  - After the Review was first written, the person renamed the app package `backend` to `app`,
+    which reverses a rejection of *Layers as packages that depend inward*; a fourth record
+    supersedes it (Decisions, item 9).
 - **Wider than planned:** a pre-existing race in the closed-pipe helper, which the report's
   write-failure test used and the new help test inherited, fixed in its own commit; the Banned
   table and the `rust-effects` and `review-and-planning` skills, which restate the gate's lists;
@@ -287,15 +324,16 @@ The person signed off this plan as written.
   renamed-binary tests do, so 46 is the count on Unix; CI runs on Linux and loses nothing.
 - **Deliberately not done:**
   - The accepted record *A domain model in the records' language* still names the old paths of
-    `domain` and `core`, by the person's decision; *Layers as packages that depend inward* names
-    where they live.
+    `domain` and `core`, by the person's decision; *Libraries and an app as packages that depend
+    inward* names where they live, and maps the other accepted records' `backend` to `app`.
   - The config module: it lands with its first setting.
   - `tokio`, and `tracing` with `tracing-subscriber`: deferred to the service stage, each with its
     own record.
-  - `make deps` recognises workspace members by name only, so a registry crate named `engine` or
-    `store` would pass as one; matching members by name and path would close that.
+  - `make deps` recognises workspace members by name only, so a registry crate named `app`,
+    `engine` or `store` would pass as one; matching members by name and path would close that.
   - `text_io` repeats the wording of `RowError` and `AmountError`, and `render_csv` drops csv's
     cause.
   - `rand` has no direct use until the benchmark generator lands.
-- **What it cost:** three records, two packages, eight program crates (24 in all), six tests (40
-  became 46), and a lock that gained only the two packages and the eight crates.
+- **What it cost:** four records, one of them superseding another written the same day; two
+  packages and a rename; eight program crates (24 in all); six tests (40 became 46); and a lock
+  that gained only the two packages and the eight crates.

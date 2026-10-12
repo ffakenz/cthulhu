@@ -30,7 +30,7 @@ cthulhu/
 ├── README.md             setup and usage
 ├── CLAUDE.md             this file
 ├── transactions.csv      a sample input: `cargo run -- transactions.csv`
-├── backend/              package `backend`: the adapters and the binary `cthulhu`
+├── app/                  package `app`: the adapters and the binary `cthulhu`
 │   ├── src/
 │   │   ├── lib.rs        the library: the CSV and text adapters
 │   │   ├── csv_io.rs     the CSV adapters
@@ -64,8 +64,8 @@ cthulhu/
 ```
 
 `engine` holds the functional core: logic modules that reach effects only through ports. `store`
-and the library in `backend` hold the adapters that implement those ports. Dependencies point
-inward: `backend` depends on `store` and `engine`, `store` on `engine`, and `engine` on no other
+and the library in `app` hold the adapters that implement those ports. Dependencies point
+inward: `app` depends on `store` and `engine`, `store` on `engine`, and `engine` on no other
 package of the workspace, so a core module that imports an adapter does not build. `main.rs` is
 the composition root: the only production code that constructs an adapter or touches the clock,
 the environment, the arguments or stdio; everything it builds is passed down as a value.
@@ -178,8 +178,8 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - Fixtures and stubs live beside the test, not in its body; the test body stays the behaviours
   under test.
 - Nothing in production code may exist only for testing.
-- Black-box tests live in `backend/tests/it` and see only the public APIs of `engine`, `store` and
-  `backend`: one test crate, `main.rs` plus modules that mirror the libraries' modules, and
+- Black-box tests live in `app/tests/it` and see only the public APIs of `engine`, `store` and
+  `app`: one test crate, `main.rs` plus modules that mirror the libraries' modules, and
   `support.rs` for helpers: `for_all`, which runs each law on `proptest`, the strategies in
   `support/generate.rs`, the rows spelled as CSV text in `support/spelling.rs` and the naive model
   in `support/model.rs`. `cli.rs` drives the binary through `CARGO_BIN_EXE_cthulhu`, each fixture's

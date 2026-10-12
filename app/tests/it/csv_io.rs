@@ -4,7 +4,7 @@
 
 use std::io::{self, Read, Write};
 
-use backend::csv_io::{CsvSource, SinkError, render_csv};
+use app::csv_io::{CsvSource, SinkError, render_csv};
 use engine::core::open;
 use engine::domain::ClientId;
 use engine::run::{Accounts, Row, SourceError};

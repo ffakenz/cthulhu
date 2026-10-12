@@ -13,9 +13,9 @@ stage 1 and proptest plans kept beside it as
 [tasks/stage-1-library-plan.md](../../tasks/stage-1-library-plan.md) and
 [tasks/stage-1-proptest-plan.md](../../tasks/stage-1-proptest-plan.md). Three red and green pairs
 follow, with the runtime's laws moved onto CSV text between the first two.
-[backend/src/csv_io.rs](../../backend/src/csv_io.rs) reads rows from CSV text into commands and
-writes the accounts table as CSV, and [backend/src/main.rs](../../backend/src/main.rs) runs a file
-through them, with the report's lines from [backend/src/text_io.rs](../../backend/src/text_io.rs) on
+[app/src/csv_io.rs](../../app/src/csv_io.rs) reads rows from CSV text into commands and
+writes the accounts table as CSV, and [app/src/main.rs](../../app/src/main.rs) runs a file
+through them, with the report's lines from [app/src/text_io.rs](../../app/src/text_io.rs) on
 stderr and an exit status for every failure. All but one of the runtime's laws now reach the engine
 through the CSV source, fed text in every spelling the strategies write; the one left states `run`'s
 contract with any failing source. Fixtures drive the binary, the worked example read from

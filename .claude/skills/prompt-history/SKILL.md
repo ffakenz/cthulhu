@@ -51,7 +51,7 @@ Date: YYYY-MM-DD
   prompt that pastes or restates one keeps only its request, and the brief is named neutrally.
 - **Name what the session produced.** A decision record is named by its title, never linked and
   never cited by number (`CLAUDE.md` § Comments). A file may be linked relative to
-  `docs/prompts/`, as `[backend/src/lib.rs](../../backend/src/lib.rs)`.
+  `docs/prompts/`, as `[app/src/lib.rs](../../app/src/lib.rs)`.
 - **Lessons go elsewhere.** A correction the user made is still a turn here, but the rule it
   teaches goes to `tasks/lessons.md`, not into the prompt history.
 

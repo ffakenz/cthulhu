@@ -86,7 +86,7 @@ fn dial(to: SocketAddr, connect_limit: Duration, read_limit: Duration) -> io::Re
 The root, whole: `main` reads the world once, `boot` composes, and a test calls the same `run`.
 
 ```rust,ignore
-// backend/src/main.rs: the composition root, and the only file that constructs `Journal`.
+// app/src/main.rs: the composition root, and the only file that constructs `Journal`.
 fn main() -> ExitCode {
     #[expect(clippy::disallowed_methods, reason = "main takes the one environment snapshot")]
     let vars = std::env::vars_os();
@@ -134,7 +134,7 @@ std::env::set_var("CTHULHU_JOURNAL", "orders.journal");
 
 ```sh
 make lint                                         # the disallowed-methods gate holds elsewhere
-git grep -n 'disallowed_methods' backend/src libs # lists backend/src/main.rs and nothing else
+git grep -n 'disallowed_methods' app/src libs     # lists app/src/main.rs and nothing else
 ```
 
 A boot test calls `run` with a closure for `Journal::open` and a configuration that needs a

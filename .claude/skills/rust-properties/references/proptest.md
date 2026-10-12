@@ -1,13 +1,13 @@
 # Properties on proptest
 
 How every property in this repo runs: `support::for_all` over proptest's `TestRunner`, the
-strategies in `backend/tests/it/support/generate.rs`, and the regression files proptest saves.
+strategies in `app/tests/it/support/generate.rs`, and the regression files proptest saves.
 [SKILL.md](../SKILL.md) says which laws to assert and where to aim the strategies; this file is
 the code, and how to drive it.
 
 ## The runner
 
-`backend/tests/it/support.rs` holds the one runner every law calls:
+`app/tests/it/support.rs` holds the one runner every law calls:
 
 ```rust,ignore
 /// How many inputs each law is checked on, unless `PROPTEST_CASES` says otherwise.
@@ -43,7 +43,7 @@ pub(crate) fn for_all<S: Strategy>(
 - `contextualize_config` applies the `PROPTEST_*` variables, so `PROPTEST_CASES` overrides
   `CASES` for one run.
 - `#[track_caller]` hands proptest the calling test's file. Without a source file proptest saves
-  no failure; with it, a failure lands in `backend/tests/proptest-regressions/<module>.txt`.
+  no failure; with it, a failure lands in `app/tests/proptest-regressions/<module>.txt`.
 - A panic in `holds` is a failure like `false`, its message the reason, and it shrinks the same
   way. A panic inside a strategy, in an interpretation or in production code it calls, is not
   caught: the test fails with that panic, with no law, no counterexample and no saved seed. Keep
@@ -58,7 +58,7 @@ pub(crate) fn for_all<S: Strategy>(
 
 Both round trips of the `Quantity` parser in
 [rust.md § 1](../../functional-architecture/references/rust.md), as a `quantity` module of
-`backend/tests/it/main.rs`:
+`app/tests/it/main.rs`:
 
 ```rust,ignore
 mod quantity {
@@ -208,7 +208,7 @@ The machine is an order's write to the journal, and `Status::after(self, Step) -
 transition. The caller's `Submit` takes a `Draft` to `Awaiting`; the journal's `Written` takes that
 to `Recorded`, and its `Refused` back to `Draft`; the caller's `Cancel` takes a `Draft` to
 `Cancelled`. `Recorded` and `Cancelled` are terminal, and every other pair leaves the status as it
-is. The driver is another module of `backend/tests/it/main.rs`:
+is. The driver is another module of `app/tests/it/main.rs`:
 
 ```rust,ignore
 mod status_machine {
@@ -273,7 +273,7 @@ mod status_machine {
 A failing law prints proptest's lines before its own:
 
 ```text
-proptest: Saving this and future failures in …/backend/tests/proptest-regressions/domain.txt
+proptest: Saving this and future failures in …/app/tests/proptest-regressions/domain.txt
 proptest: If this test was run on a CI system, you may wish to add the following line to your copy of the file. (You may need to create it.)
 cc 169571591a81d22cebc37381e52528a500f026f3953a773781033517f0a1f706
 ```

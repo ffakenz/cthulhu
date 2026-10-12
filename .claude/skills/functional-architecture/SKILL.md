@@ -108,7 +108,7 @@ because the receiver dedups it.
 ## Tests keep the black box
 
 Write the failing test first, then the minimum implementation that passes; that part is not
-optional. The backbone is a black-box test in `backend/tests`, which the compiler limits to the
+optional. The backbone is a black-box test in `app/tests`, which the compiler limits to the
 public APIs: it drives the real surface (the binary, or `engine`'s entry point, `run`) and asserts
 behaviour. Add a unit test beside the code only for a pure fold awkward to reach from outside, such
 as a `decide` or a `disposition`. Delete tests of construction, derives and field access. A

@@ -160,13 +160,37 @@ The person signed off this plan as written.
     and a grep; the Uses cells list crates first; and this tick. The module box stays a picture of
     the format and decimal crates.
   - Commit `refactor(errors): derive Display and Error with thiserror`.
-- [ ] **4, red.** In `backend/tests/it/cli.rs`, `a_wrong_argument_count_is_a_usage_error`, which
-      pins today's one-line usage, is rewritten to clap's messages for no argument, for two and
-      for an unknown flag. New tests pin the help and version flags, an empty argument, a path
-      after `--`, a help that cannot be written, and clap's whole usage error from a copy of the
-      binary under another name, which must still name `cthulhu`, as the signed record decides;
-      the wrong implementation it rejects is clap taking the program's name from its path. Each
-      fails against today's binary, and nothing else fails.
+- [x] **4, red.** In `backend/tests/it/cli.rs`, `a_wrong_argument_count_is_a_usage_error`, which
+      pins today's one-line usage, is rewritten to clap's messages for no argument and for two.
+      New tests pin the help and version flags, an empty path and an unknown flag, a path that
+      begins with `-` after `--`, a help that cannot be written, and clap's whole usage error from
+      a copy of the binary under another name, which must still name `cthulhu`, as the signed
+      record decides; the wrong implementation it rejects is clap taking the program's name from
+      its path. Each fails against today's binary, and nothing else fails.
+  - The fixtures are clap's own output: a throwaway project outside the repository, on clap 4.6.7
+    with the same features and attributes, printed the help, the version and each usage error.
+  - The unknown flag shares a test with the empty path, so the count test keeps a name that holds.
+    The second path is a fixed `extra.csv`, so its message is a constant. The binary runs under
+    another name through its `argv[0]`, not through another file: a copy can fail with `ETXTBSY`
+    on Linux, and a hard link, made while other tests ran the binary, got those runs killed with
+    SIGKILL on macOS, in one or two tests of most runs, while twelve runs without it all passed.
+  - The wrong implementations are rejected: in the same throwaway project, a parser without
+    `bin_name`, run under `argv[0]` `renamed`, prints `Usage: renamed <input.csv>`, which only the
+    renamed-binary test catches; one without `name` prints the package's name for `-V`, which the
+    version test catches.
+  - Run: `make deps fmt-check lint build` green; `cargo test --workspace --locked --no-fail-fast`
+    gives 38 passed, 7 failed and 1 ignored in `it`, and every other target passes, holding no
+    tests. The seven are the six new tests and the rewritten one, each failing for its reason at
+    its first case: `-h`, `-V`, the empty path and `--help` into a closed stdout exit 3, read as
+    paths that do not open; `-- -dash.csv` exits 2, two arguments; no argument and the renamed
+    binary print the old one-line usage. The cases behind them, run by hand against today's
+    binary: `--help`, `--version` and `--input` exit 3 the same way, and a second path exits 2
+    with the old line. Eight runs of `it` fail the same seven tests and pass every other.
+  - The code-reviewer found no blocker; it rebuilt the green design independently and every
+    fixture matched byte for byte. Its should-fix is taken: the check against the wrong
+    implementations above. Its nits are taken too: the run's evidence per first case and by hand,
+    the fixed second argument, the commit body, and a renamed binary that no writer holds open,
+    first as a hard link, then, after the hard link's SIGKILLs, as `argv[0]`.
   - Commit `test(cli): pin the help, the version and clap's usage errors`.
 - [ ] **4, green.** `clap` 4.6.7 in `backend`, and `ADMITTED` gains `clap`, `clap_builder`,
       `clap_derive`, `clap_lex`, `anstyle` and `heck`. `main.rs` parses with `try_parse_from` and

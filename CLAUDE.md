@@ -31,6 +31,7 @@ cthulhu/
 │   ├── src/
 │   │   ├── lib.rs        the library: core, runtime and adapters
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── csv_io.rs     the CSV adapters
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
 │   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
@@ -164,8 +165,8 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - Nothing in production code may exist only for testing.
 - Black-box tests live in `backend/tests/it` and see only the public API: one test crate,
   `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
-  each law on `proptest`, the strategies in `support/generate.rs` and the naive model in
-  `support/model.rs`.
+  each law on `proptest`, the strategies in `support/generate.rs`, the rows spelled as CSV text
+  in `support/spelling.rs` and the naive model in `support/model.rs`.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments

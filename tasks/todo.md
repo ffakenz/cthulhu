@@ -260,7 +260,8 @@ that pins each:
    must still read as its dispute command. A deposit or withdrawal without one is `MissingAmount`.
    - Pinned by the same law (a row's `Tail` and `stray`) and by the malformed fixture.
 3. **Padded or quoted fields and header names, in any column order.** They must read as the bare
-   ones.
+   ones, with any padding inside the quotes. csv opens a quote only at a field's first byte, so
+   padding outside the quotes keeps them as text: `deposit, 1, 1, "1.0"` is an invalid amount.
    - Pinned by the same law (each line's `Field`s, the shuffled header).
 4. **An output that takes only part of the table** (a closed pipe, a full disk). It must exit
    non-zero, never succeed silently.
@@ -338,7 +339,7 @@ const REQUIRED: [&str; 3] = ["type", "client", "tx"];
 const TABLE: [&str; 5] = ["client", "available", "held", "total", "locked"];
 
 /// A row as the CSV source reads it: its type, its client and tx id, and its amount's text,
-/// `None` when the row leaves the amount empty or stops before it.
+/// `None` when the header names no amount, or the row leaves it empty or stops before it.
 #[derive(Debug, Deserialize)]
 struct CsvRow<'a> {
     #[serde(rename = "type")]
@@ -429,7 +430,7 @@ impl<R: Read> Iterator for CsvSource<R> {
             Ok(true) => row(&self.record, &headers),
             Err(error) => match spoiled(&error) {
                 Spoiled::Record => Row::Malformed(RowError::Unreadable),
-                Spoiled::Input => return Some(Err(SourceError::Unreadable)),
+                Spoiled::Input | Spoiled::Unknown => return Some(Err(SourceError::Unreadable)),
             },
         };
         self.state = State::Rows(headers);
@@ -437,7 +438,8 @@ impl<R: Read> Iterator for CsvSource<R> {
     }
 }
 
-/// The header, once it names `type`, `client` and `tx`; a header that does not read names none.
+/// The header, once it names `type`, `client` and `tx`; a header that is not UTF-8 names none, and
+/// a failed read is `Unreadable`.
 fn header<R: Read>(reader: &mut csv::Reader<R>) -> Result<StringRecord, SourceError> {
     match reader.headers() {
         Ok(headers) if REQUIRED.iter().all(|name| headers.iter().any(|column| column == *name)) => {
@@ -446,7 +448,7 @@ fn header<R: Read>(reader: &mut csv::Reader<R>) -> Result<StringRecord, SourceEr
         Ok(_) => Err(SourceError::IncompleteHeader),
         Err(error) => Err(match spoiled(&error) {
             Spoiled::Record => SourceError::IncompleteHeader,
-            Spoiled::Input => SourceError::Unreadable,
+            Spoiled::Input | Spoiled::Unknown => SourceError::Unreadable,
         }),
     }
 }
@@ -470,17 +472,19 @@ enum Spoiled {
     Record,
     /// The input.
     Input,
+    /// A kind of failure `spoiled` does not name.
+    Unknown,
 }
 
 /// Classifies a failed read: a record that is not UTF-8, that does not deserialize or whose
-/// length is refused spoils that record; any other failure, an I/O error included, the input.
-#[expect(clippy::wildcard_enum_match_arm, reason = "csv::ErrorKind is non_exhaustive")]
+/// length is refused spoils that record; a failed read, seek or write spoils the input.
 fn spoiled(error: &csv::Error) -> Spoiled {
     match error.kind() {
-        ErrorKind::Utf8 { .. } | ErrorKind::UnequalLengths { .. } | ErrorKind::Deserialize { .. } => {
-            Spoiled::Record
-        }
-        _ => Spoiled::Input,
+        ErrorKind::Utf8 { .. }
+        | ErrorKind::UnequalLengths { .. }
+        | ErrorKind::Deserialize { .. } => Spoiled::Record,
+        ErrorKind::Io(_) | ErrorKind::Seek | ErrorKind::Serialize(_) => Spoiled::Input,
+        _ => Spoiled::Unknown,
     }
 }
 
@@ -1344,6 +1348,9 @@ use crate::support::{self, generate, model};
 /// The table's header line.
 const HEADER: &[u8] = b"client,available,held,total,locked\n";
 
+/// A header whose first name holds a byte that is not UTF-8, then a row.
+const NOT_UTF8_HEADER: &[u8] = b"type\xff,client,tx\ndeposit,1,1\n";
+
 /// What the model makes of `input`'s rows, as a source yields them.
 fn expected(input: &Input) -> Vec<Result<Row, SourceError>> {
     input.rows().iter().map(|row| Ok(generate::row(row))).collect()
@@ -1424,6 +1431,12 @@ fn prop_header_lacking_type_client_or_tx_ends_the_source() {
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+#[test]
+fn a_header_that_is_not_utf8_lacks_its_columns() {
+    let items: Vec<Result<Row, SourceError>> = CsvSource::new(NOT_UTF8_HEADER).collect();
+    assert_eq!(items, [Err(SourceError::IncompleteHeader)]);
 }
 
 #[test]
@@ -1862,31 +1875,50 @@ Red:
     - the read-failure law reads through a `read_broken` helper.
   - The private row speller `flawed` became `unreadable`, freeing the name.
   - Re-run: "26 passed; 3 failed", the same three laws.
-- [ ] Per-commit gate (red); commit `test(csv_io): …`.
+- [x] Per-commit gate (red); commit `test(csv_io): …`: `ca064cb`. The deps, fmt-check, lint
+      and build checks are green; the tests fail as above; the name greps and the record scan
+      are silent.
 
 Green:
 
-- [ ] `backend/Cargo.toml` `[dependencies]`, by hand:
+- [x] `backend/Cargo.toml` `[dependencies]`, by hand:
       `csv = "1.4"`, `serde = { version = "1", features = ["derive"] }`. Run
       `cargo check --workspace --tests` once without `--locked`. The lock's diff adds:
   - the packages `csv`, `csv-core` and `ryu`;
   - the `backend` entry's dependency lines;
   - `serde_derive` among `serde`'s dependencies, now that `derive` is on.
 
-  No pin changes.
-- [ ] `backend/src/run/row.rs`: `RowError::Unreadable`'s doc names every way a row fails to read:
+  No pin changes. The diff is exactly that: `csv` 1.4.0, `csv-core` 0.1.13, `ryu` 1.0.23,
+  `backend`'s two lines and `serde_derive` under `serde`.
+- [x] `backend/src/run/row.rs`: `RowError::Unreadable`'s doc names every way a row fails to read:
       a byte that is not UTF-8, an unknown type, a client or tx id that is missing or is not a
       `u16` or a `u32`, or a column the header names left out or named twice.
-- [ ] `csv_io.rs`: the source half of Interfaces, from the module doc to `spoiled`, with the
+- [x] `csv_io.rs`: the source half of Interfaces, from the module doc to `spoiled`, with the
       imports it uses; `SinkError`, `render_csv` and their imports come with Task 3.
-- [ ] `cargo test --workspace --locked`: 29 passed.
-- [ ] Law evidence: with the work staged, each source break of Law evidence fails its law; after
-      each undo, `git diff --quiet`.
-- [ ] Docs:
+- [x] `cargo test --workspace --locked`: 29 passed. Run: "29 passed; 0 failed". After the
+      review's example test, 30.
+- [x] Law evidence: with the work staged, each source break of Law evidence fails its law; after
+      each undo, `git diff --quiet`. All six breaks gave `rc=101` and were undone, and no
+      regression file was written.
+- [x] Review fixes, staged before the green commit. The code-reviewer found no blocker and three
+      should-fixes, all taken:
+  - `spoiled` names all six `csv::ErrorKind`s, and its `_` arm builds `Spoiled::Unknown`, which
+    both callers read as the input's failure. No `#[expect]` is left, and a kind a later csv
+    adds fails `make lint` until it is classified.
+  - The non-UTF-8 header ruling is pinned by the example test
+    `a_header_that_is_not_utf8_lacks_its_columns`. It failed against the break in Law evidence,
+    and that break was undone.
+  - `RowError::Unreadable`'s doc is true: an unread column other than `amount`, and a known
+    column named twice.
+
+  Nits taken: the `CsvRow` and `header` docs; Review focus 3 and § Input on quotes opened
+  only at a field's first byte.
+- [x] Docs:
   - `CLAUDE.md` § Repository layout and `README.md` § Layout: `csv_io.rs  the CSV adapters`;
   - `README.md` § Setup: `csv` and `serde` are in use;
   - `CLAUDE.md` § Tests: `support/spelling.rs` spells rows as CSV text.
-- [ ] Per-commit gate; commit `feat(csv_io): …`.
+- [x] Per-commit gate; commit `feat(csv_io): …`. `make ci` green, 30 passed. The review's three
+      should-fixes are taken (above); the name greps and the record scan are silent.
 
 ### Task 2 — the runtime's laws through the source
 
@@ -1894,7 +1926,7 @@ Green:
       `MemoryLedger`, `MemorySeenIds`, `Row`, `RunError`, `SourceError`, `Summary` and `run`.
       `spelling.rs`: `prefix` and `with_rows`. `model.rs`: `Engine::after`, through which
       `printed` folds. `run.rs` as Test code says.
-- [ ] `cargo test --workspace --locked`: 29 passed. `git diff -w backend/tests/it/run.rs` shows
+- [ ] `cargo test --workspace --locked`: 30 passed. `git diff -w backend/tests/it/run.rs` shows
       only inputs and helpers changing.
 - [ ] Law evidence: the seven switched laws, each against its stage 1 break.
 - [ ] Per-commit gate; commit `test(it): …`.
@@ -1916,13 +1948,13 @@ Red:
   ```
 
 - [ ] `cargo test --workspace --locked` fails on exactly the two sink laws: the empty table is
-      not the model's, nor does it start with the header. 29 pass.
+      not the model's, nor does it start with the header. 30 pass.
 - [ ] Per-commit gate (red); commit `test(csv_io): …`.
 
 Green:
 
 - [ ] `render_csv` as Interfaces gives it.
-- [ ] `cargo test --workspace --locked`: 31 passed. Law evidence: the two sink breaks.
+- [ ] `cargo test --workspace --locked`: 32 passed. Law evidence: the two sink breaks.
 - [ ] `docs/architecture.md`:
   - the `csv_io` row of § Modules holds `SinkError`;
   - § In detail shows `render_csv`'s failure, `SinkError`, reaching `ExitCode` beside
@@ -1937,7 +1969,7 @@ Red:
       `Report:` block after the worked example's Output block.
 - [ ] `backend/src/main.rs` stays `fn main() {}`. `cargo test --workspace --locked` fails on
       exactly six `cli` tests, since each expects a table, a status other than `0`, or a line on
-      stderr. 31 pass; on macOS the `/dev/full` fixture is ignored, and on Linux it is a seventh
+      stderr. 32 pass; on macOS the `/dev/full` fixture is ignored, and on Linux it is a seventh
       failure.
 - [ ] Per-commit gate (red); commit `test(cli): …`.
 
@@ -1948,14 +1980,14 @@ Green:
 - [ ] `run.rs`: delete `the_overview_example_ends_with_its_documented_accounts`, `overview_rows`
       and `overview_printed`, with the imports only they used: `DisputeReason`, `chargeback`,
       `deposit`, `dispute` and `withdrawal`.
-- [ ] `cargo test --workspace --locked`: 36 passed and 1 ignored on macOS (37 passed on Linux).
+- [ ] `cargo test --workspace --locked`: 37 passed and 1 ignored on macOS (38 passed on Linux).
 - [ ] `make run INPUT=<the overview's input, saved in the scratchpad> > <scratchpad>/out.csv`:
       `out.csv` holds exactly the overview's Output block, and stderr ends with its Report block
       after cargo's own lines.
 - [ ] Docs, each in step with the code:
   - `docs/overview.md`:
     - § Input: a byte-order mark, blank lines, quoted fields and `\r\n` or `\r` line ends read as
-      usual;
+      usual; a quote opens a quoted field only at the field's first byte;
     - also § Input, as Questions on gaps 1, 2 and 7 settle: other columns are ignored, but not
       when a row stops before them; a known column named twice makes every row malformed; a
       header that is not UTF-8 lacks the columns, and a row holding a byte that is not UTF-8 is
@@ -1998,12 +2030,13 @@ One row per break, filled during execution: the law, its break, and the shrunk c
 
 | Law | Break | Shrunk counterexample |
 |---|---|---|
-| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `Trim::None`: padded fields stop reading | |
-| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `flexible(false)`: a row cut before its trailing amount, or longer than the header, fails | |
-| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | the length check removed: extra fields are ignored instead of counted | |
-| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `client` read as text and parsed with `str::parse`, which refuses `0x7` | |
-| `prop_header_lacking_type_client_or_tx_ends_the_source` | the header check leaves out `tx` | |
-| `prop_read_failure_ends_the_source` | an I/O error read as a malformed row | |
+| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `Trim::None`: padded fields stop reading | two deposits by client 1, the first row's line padding one field with a trailing space |
+| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `flexible(false)`: a row cut before its trailing amount, or longer than the header, fails | `TooManyFields { first: "", rest: [] }` under the header `type,client,tx`: read as `Unreadable` |
+| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | the length check removed: extra fields are ignored instead of counted | `TooManyFields { first: "", rest: [] }` under the header `type,client,tx`: read as a deposit |
+| `prop_source_reads_every_spelling_as_the_model_reads_the_rows` | `client` read as text and parsed with `str::parse`, which refuses `0x7` | two deposits by client 1, the first row's client spelled `0x1` |
+| `prop_header_lacking_type_client_or_tx_ends_the_source` | the header check leaves out `tx` | no rows under the header `type,client,amount`: no error |
+| `prop_read_failure_ends_the_source` | an I/O error read as a malformed row | four client-1 rows cut mid-input: the last item is a malformed row, not `Unreadable` |
+| `a_header_that_is_not_utf8_lacks_its_columns` (example) | a header that is not UTF-8 read as `Unreadable` | the fixture's own header: `Unreadable`, not `IncompleteHeader` |
 | `prop_table_is_the_naive_models` | the total column prints `held` | |
 | `prop_table_that_cannot_be_written_whole_is_an_error` | `render_csv` returns without flushing | |
 | `prop_tx_ids_are_consumed_on_first_sight_across_clients` | withdrawals skip intake and are decided as `Sight::First` | |

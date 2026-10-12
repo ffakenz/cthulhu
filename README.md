@@ -20,8 +20,7 @@ rustup toolchain install
 ```
 
 Admitted crates: `csv`, `serde` and `rust_decimal`, with the 13 crates they build on; for tests
-only, `proptest`, with the 13 more it builds on. `rust_decimal` and `proptest` are in use; `csv`
-and `serde` arrive with the CSV adapters.
+only, `proptest`, with the 13 more it builds on. All of them are in use.
 
 ## Usage
 
@@ -57,6 +56,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 │   ├── src/
 │   │   ├── lib.rs        the library: core, runtime and adapters
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── csv_io.rs     the CSV adapters
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
 │   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`

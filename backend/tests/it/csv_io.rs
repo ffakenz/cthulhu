@@ -11,6 +11,9 @@ use proptest::sample::Index;
 use crate::support::spelling::{self, Input};
 use crate::support::{self, generate};
 
+/// A header whose first name holds a byte that is not UTF-8, then a row.
+const NOT_UTF8_HEADER: &[u8] = b"type\xff,client,tx\ndeposit,1,1\n";
+
 /// What the model makes of `input`'s rows, as a source yields them.
 fn expected(input: &Input) -> Vec<Result<Row, SourceError>> {
     input.rows().iter().map(|row| Ok(generate::row(row))).collect()
@@ -68,6 +71,12 @@ fn prop_header_lacking_type_client_or_tx_ends_the_source() {
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+#[test]
+fn a_header_that_is_not_utf8_lacks_its_columns() {
+    let items: Vec<Result<Row, SourceError>> = CsvSource::new(NOT_UTF8_HEADER).collect();
+    assert_eq!(items, [Err(SourceError::IncompleteHeader)]);
 }
 
 #[test]

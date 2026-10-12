@@ -18,8 +18,9 @@ pub enum Row {
 /// Why a row is malformed: its kind, by which it is counted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RowError {
-    /// A field does not read: an unknown type, or a client or tx id that is missing or is not a
-    /// `u16` or a `u32`.
+    /// A field does not read: a byte that is not UTF-8, an unknown type, a client or tx id that is
+    /// missing or is not a `u16` or a `u32`, a column other than `amount` that the row stops
+    /// before, or `type`, `client`, `tx` or `amount` named twice in the header.
     Unreadable,
     /// More fields than the header names.
     TooManyFields,

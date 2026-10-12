@@ -45,7 +45,7 @@ Both functions read the current state; only `evolve` produces the next one.
 | Functional core, imperative shell | `core` is pure; `run` reaches effects only through ports; only `main.rs` touches the world | *A pure core* |
 | Domain-driven design, in functional form | `domain`: values, entities and messages named from the overview's Terms; each entity reached by its key; a client's ledger as the aggregate | *A domain model in the records' language*; *Entities identified by their keys* |
 | Event sourcing with projections | state is a fold of `evolve`; `Accounts` and `Report` are views | *State changes only through events*; *Sources, sinks and projections* |
-| Ports and adapters | `LedgerStore`, `SeenIds`, the CSV source and sink | *Effects behind ports* |
+| Ports and adapters | `LedgerStore`, `SeenIds`, the CSV source and sink, the report's text sink | *Effects behind ports* |
 | Composition root | `main.rs` builds every adapter | *Effects behind ports* |
 | Single writer per partition | each client's state has one writer | *State partitioned by client* |
 | Idempotent intake | `SeenIds`: the first sight of a tx id wins | *State partitioned by client*; *Tx ids consumed on first sight* (design) |

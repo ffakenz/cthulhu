@@ -10,9 +10,9 @@ A picture of the decisions in `docs/adr/`, each named by its title.
  source ─► intake ─► partition ─► projections ─► sink
    │         │          │              │            │
  rows in   arrival   one writer   Accounts,      CSV table
- order     order,    per client:  Report         on stdout
-           first     decide,
-           sight     evolve
+ order     order,    per client:  Report         on stdout,
+           first     decide,                     report on
+           sight     evolve                      stderr
 ```
 
 - A malformed row is counted and skipped; a rejection is counted; an unreadable source stops the
@@ -51,20 +51,22 @@ their laws*, *Entities identified by their keys*.
 
  end of input ──► [LedgerStore] snapshot ──► Accounts ──┐
                                                Report ──┴──► Summary ──► main.rs
- main.rs ─┬─► render_csv(Accounts) ──► [Write] (stdout)
-          ├─► Report ──► stderr
+ main.rs ─┬─► render_csv(Accounts) ──┬─► [Write] (stdout)
+          │                          └─► SinkError ──► ExitCode
+          ├─► render_report(Report) ──┬─► [Write] (stderr)
+          │                           └─► io::Error ──► ExitCode
           └─► RunError ──► ExitCode
 ```
 
-- `[port]` marks a port; `(…)` is the implementation `main.rs` supplies: an adapter, or stdout for
-  `Write`.
+- `[port]` marks a port; `(…)` is the implementation `main.rs` supplies: an adapter, or stdout or
+  stderr for `Write`.
 - The footprint is the client's account and at most one of its deposits, loaded and committed at
   the command's address: its client and tx id. Dispute commands skip `SeenIds`.
 - `decide` only checks conditions; `evolve` only computes, and fails only on overflow, which
   rejects the command. A rejection changes no balance; its commit stores only an account the
   step opened.
-- `Accounts` and `Report` are the projections; `render_csv`, the sink adapter, writes the table to
-  `Write`.
+- `Accounts` and `Report` are the projections; `render_csv` and `render_report`, the sink
+  adapters, write the table and the report to `Write`.
 
 ## Wiring
 
@@ -74,7 +76,8 @@ their laws*, *Entities identified by their keys*.
  main.rs
    ├─ builds    CsvSource, MemoryLedger, MemorySeenIds
    ├─ calls     run(source, stores) ─► Summary { accounts, report } | RunError
-   └─ renders   render_csv(accounts) ─► stdout;  report ─► stderr
+   └─ renders   render_csv(accounts) ─► stdout | SinkError;
+                render_report(report) ─► stderr | io::Error
 ```
 
 Besides adapters, only `run`, the runtime, varies between deployments; today it is sequential,
@@ -87,7 +90,8 @@ one partition, and the reference that every later runtime must equal.
 │ main.rs  composition root: argument, file, stdio, exit code    │
 ├───────────────────────────────┬────────────────────────────────┤
 │ csv_io   CsvSource,           │ memory   MemoryLedger,         │
-│          render_csv           │          MemorySeenIds         │
+│          render_csv,          │          MemorySeenIds         │
+│          SinkError            │ text_io  render_report         │
 │          (csv, serde)         │                                │
 ├───────────────────────────────┴────────────────────────────────┤
 │ run      the runtime; ports: source, LedgerStore, SeenIds;     │
@@ -105,7 +109,8 @@ one partition, and the reference that every later runtime must equal.
 ```
 
 Each layer uses only the layers below it: `memory` implements the ports `run` declares, `csv_io`
-implements the source over `Read` and renders onto `Write`, and only `main.rs` touches the world.
+implements the source over `Read` and renders the table onto `Write`, `text_io` renders the report
+onto `Write`, and only `main.rs` touches the world.
 
 | Module | Holds | Uses |
 |---|---|---|
@@ -113,7 +118,8 @@ implements the source over `Read` and renders onto `Write`, and only `main.rs` t
 | `core` | `open`, `decide_client`, `decide_dispute`, `evolve`, `Overflow` | `domain` |
 | `run` | `run`, `RunError`, `Summary`, `Accounts`, `Report`; the ports: the source (an iterator of `Result<Row, SourceError>`, with `Row` and `RowError`), `LedgerStore`, `SeenIds` | `domain`, `core` |
 | `memory` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
-| `csv_io` | `CsvRow`, `CsvSource`, `render_csv` | `csv`, `serde`, `domain`, `run` |
+| `csv_io` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `domain`, `run` |
+| `text_io` | `render_report` | `domain`, `run` |
 | `main.rs` | the argument, the input file, stdio, `ExitCode` | the library |
 
 - `domain` is the model in the records' terms: values, entities and messages, each entity reached

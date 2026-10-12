@@ -1,6 +1,6 @@
 # stage-1-core — the decider: total checks and the only computation, held to nine laws
 
-Plan of record: `tasks/todo.md`
+Plan of record: `tasks/stage-1-library-plan.md`
 
 ## Context
 
@@ -33,7 +33,7 @@ Files: `backend/tests/it/support/generate.rs` (extend).
 
 - [x] Add `InputRow` with its `Fields` variant, `Kind`, the five row builders, `Edge` with its six
       variants and `EDGES`, `Fresh`, `rows`, `command`, `commands` and `events`, exactly as
-      `tasks/todo.md` § Generators states.
+      `tasks/stage-1-library-plan.md` § Generators states.
 - [x] Every amount enters through `Amount::from_str`, and every address through
       `Address::new(ClientId::from(client), TxId::from(tx))`; `command(&InputRow) ->
       Option<Command>` is `None` for a missing or unparseable amount, so the core only ever sees
@@ -47,7 +47,7 @@ Files: `backend/src/lib.rs`, `backend/src/core.rs`, `backend/src/domain/ledger.r
 - [x] `pub mod core;` in `lib.rs`; `mod core;` in `tests/it/main.rs`.
 - [x] In `domain/ledger.rs`, the `pub(crate)` items whose first user is `evolve`, so `dead_code`
       stays quiet: `Account::new`, `Account::lock` and `Deposit::new`.
-- [x] `core.rs` with the signatures from `tasks/todo.md` § Interfaces. `open` is real from the
+- [x] `core.rs` with the signatures from `tasks/stage-1-library-plan.md` § Interfaces. `open` is real from the
       start: `Footprint::new(Account::new(Balance::ZERO, Balance::ZERO, Lock::Unlocked), None)`.
       Lint-clean stubs for the rest: `decide_client` returns `Err(ClientReason::AccountLocked)`,
       `decide_dispute` returns `Err(DisputeReason::UnknownDeposit)`, `evolve` returns
@@ -396,10 +396,10 @@ fn client_decision(
       `Overflow`, still match `backend/src/core.rs`.
 - [x] `CLAUDE.md` and `README.md` layouts: add `core.rs`.
 - [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] The two forbidden-name greps of `tasks/stage-1-library-plan.md` § Global constraints: both silent.
 - [x] `make ci` — green; paste the test summary line here. `test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`.
-- [x] Tick this ticket's items and its line in `tasks/todo.md`; stage explicit paths; commit with
-      `git commit -F` as `tasks/todo.md` § Commits gives it.
+- [x] Tick this ticket's items and its line in `tasks/stage-1-library-plan.md`; stage explicit paths; commit with
+      `git commit -F` as `tasks/stage-1-library-plan.md` § Commits gives it.
 
 ## Law evidence
 

@@ -17,7 +17,7 @@ The second moves the 25 laws onto `proptest` strategies run by a thin `support::
 `make deps` a check that keeps test-only crates out of the program's build graph, rewrites the
 `rust-properties` skill, and brings `CLAUDE.md`, `README.md` and three more skills in line with
 them. Every deliberate break of stage 1 still fails, now with a shrunk counterexample, as the plan
-in [tasks/todo.md](../../tasks/todo.md) records. The branch stays local: landing it is the
+in [tasks/stage-1-proptest-plan.md](../../tasks/stage-1-proptest-plan.md) records. The branch stays local: landing it is the
 person's to do.
 
 ---
@@ -31,7 +31,7 @@ person's to do.
 The rebase replayed the branch onto `main` with `make ci` green after each commit and the final
 tree unchanged. Research on `proptest`'s versions, features, seeding and failure persistence, and an
 inventory of every place that names the harness or the dependency set, fed a plan in
-[tasks/todo.md](../../tasks/todo.md): `proptest` 1.12.0 for tests only, a record superseding the
+[tasks/stage-1-proptest-plan.md](../../tasks/stage-1-proptest-plan.md): `proptest` 1.12.0 for tests only, a record superseding the
 dependency record and landing alone first, the runner kept as a thin wrapper, failures saved and
 replayed, and the migration as one commit. The plan went to the person for sign-off.
 

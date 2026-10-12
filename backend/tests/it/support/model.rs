@@ -120,10 +120,7 @@ pub(crate) struct Printed {
 
 /// What the naive engine prints for `rows`.
 pub(crate) fn printed(rows: &[InputRow]) -> Printed {
-    let mut engine = Engine::default();
-    for input in rows {
-        engine.take(input);
-    }
+    let engine = Engine::after(rows);
     Printed {
         accounts: engine
             .accounts
@@ -141,12 +138,35 @@ pub(crate) fn printed(rows: &[InputRow]) -> Printed {
     }
 }
 
+/// The accounts table the naive engine prints for `rows`: the header, then a line per account by
+/// client id.
+pub(crate) fn table(rows: &[InputRow]) -> String {
+    let lines: Vec<String> = Engine::after(rows)
+        .accounts
+        .iter()
+        .map(|(client, &Account { available, held, locked })| {
+            let total = available.plus(held);
+            format!("{client},{available},{held},{total},{locked}\n")
+        })
+        .collect();
+    format!("client,available,held,total,locked\n{}", lines.concat())
+}
+
 impl Engine {
+    /// The naive engine after taking `rows`, in order.
+    fn after(rows: &[InputRow]) -> Self {
+        let mut engine = Self::default();
+        for input in rows {
+            engine.take(input);
+        }
+        engine
+    }
+
     /// One input row, as the overview's tables say.
     fn take(&mut self, input: &InputRow) {
         match input {
-            InputRow::Unreadable => count(&mut self.malformed, RowError::Unreadable),
-            InputRow::TooManyFields => count(&mut self.malformed, RowError::TooManyFields),
+            InputRow::Unreadable(_) => count(&mut self.malformed, RowError::Unreadable),
+            InputRow::TooManyFields { .. } => count(&mut self.malformed, RowError::TooManyFields),
             InputRow::Fields { kind, client, tx, amount } => match kind {
                 Kind::Deposit => {
                     if let Some(units) = self.amount(amount.as_deref()) {

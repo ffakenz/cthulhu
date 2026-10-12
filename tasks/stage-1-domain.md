@@ -1,6 +1,6 @@
 # stage-1-domain — the ledger's vocabulary, with amounts parsed once into exact money
 
-Plan of record: `tasks/todo.md`
+Plan of record: `tasks/stage-1-library-plan.md`
 
 ## Context
 
@@ -21,7 +21,7 @@ events*, *Correctness defined by laws and a model*, *A domain model in the recor
       lists both domain-model records, which read `Accepted`, and the `domain-modeling` and
       `curry-howard` skills.
 - [x] `make ci` on the branch, before any change — green.
-- [x] `tasks/todo.md`, the four tickets and `docs/prompts/0002-stage-1-planning.md` are present
+- [x] `tasks/stage-1-library-plan.md`, the four tickets and `docs/prompts/0002-stage-1-planning.md` are present
       and untracked, and `tasks/lessons.md` is modified. If any check here fails, stop and ask the
       person.
 - [x] A scratch workspace with the same toolchain, edition, resolver and manifest (outside the
@@ -100,14 +100,14 @@ Files: `backend/src/lib.rs`, `backend/src/domain.rs`, `backend/src/domain/money.
 
 - [x] `lib.rs`: a one-line module doc and `pub mod domain;`. `domain.rs`: module doc,
       `mod money;` and `pub use money::{Amount, AmountError, Balance};`.
-- [x] `money.rs` with the `Amount`, `AmountError` and `Balance` items of `tasks/todo.md`
+- [x] `money.rs` with the `Amount`, `AmountError` and `Balance` items of `tasks/stage-1-library-plan.md`
       § Interfaces, and lint-clean stubs: `from_str` answers `Err(AmountError::Malformed)`,
       `checked_add` and `checked_sub` answer `None`, both `Display`s write `0.0000`.
 - [x] `support.rs`: the harness block of `references/harness.md`, verbatim, with
       `pub(crate) mod generate;` and `pub(crate) mod model;` after the module doc;
       `tests/it/main.rs`: module doc, `mod support;`, `mod domain;`.
 - [x] `support/generate.rs`: `amount_spelling`, `amount_value`, `any_text`, `balance_moves` and
-      `Direction`, as `tasks/todo.md` § Generators gives them. Non-ASCII characters are written as
+      `Direction`, as `tasks/stage-1-library-plan.md` § Generators gives them. Non-ASCII characters are written as
       escapes (`'\u{663}'`, an Arabic-Indic three; `'\u{ff11}'`, a full-width one; `'\u{feff}'`).
       `AMOUNT_EDGES`:
 
@@ -279,7 +279,7 @@ Files: `backend/src/domain.rs`, `backend/src/domain/id.rs`, `backend/src/domain/
 
 - [x] `ClientId`, `TxId`, `Address`, `Account`, `Lock`, `Deposit`, `Status`, `Footprint`,
       `Command`, `ClientCommand`, `DisputeCommand`, `Event`, `ClientEvent`, `DisputeEvent`,
-      `Reason`, `ClientReason`, `DisputeReason`, `Sight` exactly as `tasks/todo.md` § Interfaces
+      `Reason`, `ClientReason`, `DisputeReason`, `Sight` exactly as `tasks/stage-1-library-plan.md` § Interfaces
       gives them, each with a doc comment; `domain.rs` re-exports every one.
 - [x] No tests here: they are declarations, and a test of construction or derives is banned. The
       core's laws pin their behaviour, `Account::total` included. Fields are private, read
@@ -300,10 +300,10 @@ Files: `backend/src/domain.rs`, `backend/src/domain/id.rs`, `backend/src/domain/
 - [x] `CLAUDE.md` and `README.md` layouts: `domain.rs` and `domain/`, and `tests/it/`.
 - [x] `git grep -n rust_decimal backend/src` lists only `backend/src/domain/money.rs`.
 - [x] Code-reviewer agent over the staged diff; act on every blocker and should-fix.
-- [x] The two forbidden-name greps of `tasks/todo.md` § Global constraints: both silent.
+- [x] The two forbidden-name greps of `tasks/stage-1-library-plan.md` § Global constraints: both silent.
 - [x] `make ci` — green; paste the test summary line here.
-- [x] Tick this ticket and its line in `tasks/todo.md`; stage explicit paths (this plan, all four
-      tickets and `tasks/lessons.md` included); commit with `git commit -F` as `tasks/todo.md`
+- [x] Tick this ticket and its line in `tasks/stage-1-library-plan.md`; stage explicit paths (this plan, all four
+      tickets and `tasks/lessons.md` included); commit with `git commit -F` as `tasks/stage-1-library-plan.md`
       § Commits gives it.
 
 ## Gate evidence
@@ -322,7 +322,7 @@ Files: `backend/src/domain.rs`, `backend/src/domain/id.rs`, `backend/src/domain/
 | Fresh seeds | `cargo test -q --test it domain::`, fifty runs | no failure |
 | Containment | `git grep -n --untracked rust_decimal backend/src` | `backend/src/domain/money.rs:7:use rust_decimal::Decimal;` |
 | Code review | code-reviewer agent over the staged diff | no blocker; three should-fixes and four nits, acted on as the Review says |
-| Forbidden names | both greps of `tasks/todo.md` § Global constraints | silent |
+| Forbidden names | both greps of `tasks/stage-1-library-plan.md` § Global constraints | silent |
 | Record citations | the record scan of § Per-commit gate | nothing |
 | The gate | `make ci` | green: `test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` |
 

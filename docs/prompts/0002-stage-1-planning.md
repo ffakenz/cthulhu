@@ -6,7 +6,7 @@ The session set out to plan the library core of stage 1 (domain, core, run and m
 each) from the accepted records, and to hold the plan for approval before any code. It started
 from the records commit on `main`, with the gate green and no product code.
 
-**Outcome:** the plan of record, [tasks/todo.md](../../tasks/todo.md), with one ticket per step,
+**Outcome:** the plan of record, [tasks/stage-1-library-plan.md](../../tasks/stage-1-library-plan.md), with one ticket per step,
 checked in a scratch crate built from its code blocks. Two architecture decision records — A
 domain model in the records' language; Entities identified by their keys — and two skills,
 `domain-modeling` and `curry-howard`, were folded into the records commit, with their syncs to

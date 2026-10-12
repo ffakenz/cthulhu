@@ -13,7 +13,7 @@ accounts, deposits, commands and events, and a dependency gate that reads the bu
 pure decider, the sequential runtime over the store ports, and the in-memory stores, held by 25
 laws and the worked example, 26 tests in all. A whole-branch review on the most capable model
 found one important gap, fixed and folded into the domain commit; the plan's Review,
-[tasks/todo.md](../../tasks/todo.md), records the rulings and the deferred findings. The planning
+[tasks/stage-1-library-plan.md](../../tasks/stage-1-library-plan.md), records the rulings and the deferred findings. The planning
 session's prompt history and this one land as the branch's last two commits. The branch stays
 local: landing it is the person's to do.
 

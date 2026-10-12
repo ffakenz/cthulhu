@@ -11,9 +11,11 @@ the first runtime is a command-line program that reads CSV.
 
 ## Status
 
-The library is built: the domain, the core, the sequential runtime and the in-memory stores, each
-held to its laws. The command-line runtime is next. The workspace, its gate (`make ci`), these
-conventions, the decision log, the knowledge base and the engine's design (`docs/`) are in place.
+The library and the command line are built: the domain, the core, the sequential runtime, the
+in-memory stores and the CSV adapters, each held to its laws, and the report's text adapter, held
+to the binary's fixtures; `make run INPUT=<file>` turns an input file into the accounts table. The benchmarks are next. The workspace, its gate
+(`make ci`), these conventions, the decision log, the knowledge base and the engine's design
+(`docs/`) are in place.
 
 ## Repository layout
 
@@ -31,11 +33,13 @@ cthulhu/
 │   ├── src/
 │   │   ├── lib.rs        the library: core, runtime and adapters
 │   │   ├── core.rs       the decider: `open`, `decide_client`, `decide_dispute`, `evolve`
+│   │   ├── csv_io.rs     the CSV adapters
 │   │   ├── domain.rs     the domain model: re-exports every type of `domain/`
 │   │   ├── domain/       ids, money, accounts and deposits, commands and events
 │   │   ├── memory.rs     the in-memory stores: `MemoryLedger`, `MemorySeenIds`
 │   │   ├── run.rs        the runtime: `run`; re-exports every type of `run/`
 │   │   ├── run/          the store ports, rows and run errors, the summary views
+│   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
 │   └── tests/it/         the black-box test crate: laws, strategies and the model
 ├── docs/
@@ -88,9 +92,9 @@ also lists optional crates that are never built. `cargo add` and `cargo install`
 ## Build, test, run
 
 ```sh
-make        # list the targets
-make ci     # the commit gate: deps, fmt-check, lint, build, test
-make run    # run the cthulhu binary
+make                    # list the targets
+make ci                 # the commit gate: deps, fmt-check, lint, build, test
+make run INPUT=<file>   # the accounts table for an input file, on stdout
 ```
 
 ## Git
@@ -164,8 +168,9 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - Nothing in production code may exist only for testing.
 - Black-box tests live in `backend/tests/it` and see only the public API: one test crate,
   `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
-  each law on `proptest`, the strategies in `support/generate.rs` and the naive model in
-  `support/model.rs`.
+  each law on `proptest`, the strategies in `support/generate.rs`, the rows spelled as CSV text
+  in `support/spelling.rs` and the naive model in `support/model.rs`. `cli.rs` drives the binary
+  through `CARGO_BIN_EXE_cthulhu`, each fixture's input written into `CARGO_TARGET_TMPDIR`.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments
@@ -205,6 +210,8 @@ external brief or specification: refer to it by a neutral name only.
 
 - `tasks/todo.md` — the plan of record for the current piece of work: checkable items, and a
   Review section when it closes.
+- `tasks/<name>-plan.md` — a closed plan, kept verbatim before the next piece of work replaces
+  `todo.md`; every reference that named it as `todo.md`, quoted prompts aside, names this file.
 - `tasks/<ticket>.md` — one ticket, copied from `tasks/TEMPLATE.md`.
 - `tasks/lessons.md` — append an entry after any correction.
 - `docs/prompts/NNNN-kebab-case-title.md` — one prompt history per working session, written

@@ -97,3 +97,38 @@ stay on the harness until stage 1 lands, then move onto `proptest`.
   name the crate it stands in for, so the person chooses between them.
 - These rules graduated into `.claude/skills/review-and-planning/SKILL.md`, under its dependency
   rule; the tests moved onto `proptest` after stage 1.
+
+## 2026-10-12 — Widened the make run allowance over an unquoted recipe
+
+**What happened.** The command-line plan widened `.claude/settings.json`'s `Bash(make run)` to
+`Bash(make run:*)`, so that `make run INPUT=<file>` would run without a prompt, and its recipe
+pasted `$(INPUT)` unquoted into the shell. An allowed `make run INPUT='x; <command>'` then ran
+the command, and so did a `CARGO=`, `SHELL=` or `-f` override. The plan's review flagged the
+unquoted variable only for paths with spaces. The command line's commit review raised the
+injection, and I carried it to the close as a note for the person; the final whole-branch review
+graded it important, and the person chose to narrow the allowance back and quote the input. The
+fix's review found the same flaw in six `cargo …:*` allowances from the workspace's first commit,
+and a probe found it in `cargo metadata:*`; the person chose to narrow them to the forms the
+Makefile runs.
+
+**What I got wrong.**
+
+1. I read a prefix allowance as allowing one command. `make run` followed by anything also takes
+   variable overrides and other makefiles, so it allows whatever a recipe, a variable or a
+   makefile can run.
+2. I pasted a make variable into a recipe's shell text unquoted, and justified it by the case
+   with no input, when the shell's own `${INPUT:+"$INPUT"}` covers that case and keeps any text
+   one argument.
+3. When a commit review found the hole, I committed over it and noted it for the close, instead
+   of stopping to ask: from that commit on, an allowed command could run any other.
+
+**Rules for next time.**
+
+- Never widen an allowance in `.claude/settings.json` to a prefix (`:*`) for `make`, or for any
+  command whose arguments can name a program, a file to run or a variable; keep the exact
+  command, and let a call with arguments prompt.
+- Quoting does not make a prefix allowance safe: make itself expands a `$(…)` in a command-line
+  variable when it exports it to a recipe. Pass a value into a recipe through the environment,
+  quote it in the shell (`$${VAR:+"$$VAR"}`), and keep the allowance exact as well.
+- A finding that lets a command run without consent stops the work: ask the person before the
+  next commit, never carry it to the close.

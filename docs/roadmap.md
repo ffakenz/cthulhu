@@ -31,7 +31,8 @@ async runtime or a disk store, needs its own decision record first.
 ## 1. Sequential reference (now)
 
 - Adds: the domain types, the core, the store ports with in-memory stores, the sequential `run`,
-  the CSV adapters, the laws, the model and the fixtures; `make run` takes an input file.
+  the CSV adapters and the report's text adapter, the laws, the model and the fixtures; `make run`
+  takes an input file.
 - Expects: bound by decoding. A throwaway probe decoded 2.5M to 4.4M rows/s on one thread with
   `csv` and `serde`.
 - Follow-ups, each kept only if measured faster:
@@ -40,6 +41,8 @@ async runtime or a disk store, needs its own decision record first.
   - one `ByteRecord` reused across rows: up to 1.4× faster decoding in the probe;
   - `with_capacity` for the stores; a paged bitmap for `SeenIds`, at most 512 MiB for every
     `u32`; packed deposit records, 42 to 28 bytes per entry in the probe.
+- Open: a bound on one row's size. `csv` grows its record buffer for any row; a bound needs a
+  reader below `csv`, and a record of its own.
 
 ## 2. Partitioned workers (enabling)
 

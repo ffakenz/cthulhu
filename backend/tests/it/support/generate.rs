@@ -240,10 +240,10 @@ fn move_amount() -> impl Strategy<Value = String> {
 pub(crate) enum InputRow {
     /// A row whose fields read: its kind, its client and tx id, and its amount's text, if any.
     Fields { kind: Kind, client: u16, tx: u32, amount: Option<String> },
-    /// A row with a field that does not read.
-    Unreadable,
-    /// A row with more fields than the header names.
-    TooManyFields,
+    /// A row that does not read, and how.
+    Unreadable(Flaw),
+    /// A row with more fields than the header names: `first`, then `rest`, after a full row.
+    TooManyFields { first: &'static str, rest: &'static [&'static str] },
 }
 
 /// What a row asks for: one of the five commands.
@@ -290,8 +290,8 @@ pub(crate) fn chargeback(client: u16, tx: u32) -> InputRow {
 /// command needs an amount that parses; a dispute command's amount is ignored.
 pub(crate) fn row(input: &InputRow) -> Row {
     let (kind, client, tx, text) = match input {
-        InputRow::Unreadable => return Row::Malformed(RowError::Unreadable),
-        InputRow::TooManyFields => return Row::Malformed(RowError::TooManyFields),
+        InputRow::Unreadable(_) => return Row::Malformed(RowError::Unreadable),
+        InputRow::TooManyFields { .. } => return Row::Malformed(RowError::TooManyFields),
         InputRow::Fields { kind, client, tx, amount } => (kind, client, tx, amount),
     };
     let address = Address::new(ClientId::from(*client), TxId::from(*tx));
@@ -390,17 +390,50 @@ enum Later {
     Dispute { on_first: bool, command: DisputeRow },
 }
 
-/// What a malformed-row edge builds: an unreadable row, a row with too many fields, or a deposit
-/// or a withdrawal with no amount or with an amount edge a source delivers, which may parse.
+/// What a malformed-row edge builds: an unreadable row and how it fails to read, a row with too
+/// many fields and its extra ones, or a deposit or a withdrawal with no amount or with an amount
+/// edge a source delivers, which may parse.
 #[derive(Debug, Clone, Copy)]
 enum Shape {
-    /// A row with a field that does not read.
-    Unreadable,
-    /// A row with more fields than the header names.
-    TooManyFields,
+    /// A row that does not read, and how.
+    Unreadable(Flaw),
+    /// A full row followed by `first`, then `rest`.
+    TooManyFields { first: &'static str, rest: &'static [&'static str] },
     /// A deposit or a withdrawal by `client`, with no amount or with `spelling`.
     Fields { client: u16, is_deposit: bool, spelling: Option<&'static str> },
 }
+
+/// How a row fails to read.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Flaw {
+    /// Its type is none of the five commands, as spelled.
+    Type(&'static str),
+    /// Its client is not a `u16`, as spelled.
+    Client(&'static str),
+    /// Its tx is not a `u32`, as spelled.
+    Tx(&'static str),
+    /// It stops before a column every header names.
+    Short,
+    /// It holds a byte that is not UTF-8.
+    NotUtf8,
+    /// It holds nothing but spaces.
+    Blank,
+}
+
+/// Types no reader accepts: a capital, all capitals, an unknown word, a plural and nothing.
+const BAD_TYPES: [&str; 5] = ["Deposit", "DEPOSIT", "transfer", "deposits", ""];
+
+/// Clients no reader accepts: past `u16`, negative, a fraction, a word, nothing, and a hex prefix
+/// with a capital X.
+const BAD_CLIENTS: [&str; 6] = ["65536", "-1", "1.0", "x", "", "0X1"];
+
+/// Tx ids no reader accepts: past `u32`, negative, an exponent, a word, nothing, and hex past
+/// `u32`.
+const BAD_TXS: [&str; 6] = ["4294967296", "-1", "1e3", "x", "", "0x100000000"];
+
+/// The fields after a full row with too many, the first and the rest: an empty one, a word, two
+/// empty ones, an amount and a word.
+const EXTRA_FIELDS: [(&str, &[&str]); 4] = [("", &[]), ("x", &[]), ("", &[""]), ("1.5", &["note"])];
 
 /// Amount edges no source delivers: it reads an empty field as absent and trims every field.
 const UNDELIVERED: [&str; 3] = ["", " 1", "1 "];
@@ -423,7 +456,7 @@ const BOUNDARY_AMOUNTS: [&str; 7] =
     ["0.0001", "999999999999999.9999", "1000000000000000", "0", "0.00001", "1.50000", "0001.5"];
 
 /// The most rows a run holds.
-const MAX_ROWS: usize = 16;
+pub(crate) const MAX_ROWS: usize = 16;
 
 /// An ordinary amount's text, `whole[.digits]`: a whole below 100 and, one draw in two, a point
 /// and one to four digits.
@@ -496,18 +529,30 @@ fn later() -> impl Strategy<Value = Later> {
     ]
 }
 
-/// What a malformed-row edge builds, each of its four rows as likely: an unreadable row, a row
-/// with too many fields, and a deposit or a withdrawal by a client from `CLIENTS` with no amount
-/// or with an amount edge a source delivers.
+/// What a malformed-row edge builds, each of its four rows as likely: an unreadable row with any
+/// flaw, a row with any of `EXTRA_FIELDS` past the header, and a deposit or a withdrawal by a
+/// client from `CLIENTS` with no amount or with an amount edge a source delivers.
 fn shape() -> impl Strategy<Value = Shape> {
     let delivered: Vec<&'static str> =
         AMOUNT_EDGES.into_iter().filter(|spelling| !UNDELIVERED.contains(spelling)).collect();
     let fields = (select(&CLIENTS), any::<bool>(), option::of(select(delivered)))
         .prop_map(|(client, is_deposit, spelling)| Shape::Fields { client, is_deposit, spelling });
     prop_oneof![
-        1 => Just(Shape::Unreadable),
-        1 => Just(Shape::TooManyFields),
+        1 => flaw().prop_map(Shape::Unreadable),
+        1 => select(&EXTRA_FIELDS).prop_map(|(first, rest)| Shape::TooManyFields { first, rest }),
         2 => fields,
+    ]
+}
+
+/// A flaw, each kind as likely.
+pub(crate) fn flaw() -> impl Strategy<Value = Flaw> {
+    prop_oneof![
+        select(&BAD_TYPES).prop_map(Flaw::Type),
+        select(&BAD_CLIENTS).prop_map(Flaw::Client),
+        select(&BAD_TXS).prop_map(Flaw::Tx),
+        Just(Flaw::Short),
+        Just(Flaw::NotUtf8),
+        Just(Flaw::Blank),
     ]
 }
 
@@ -746,8 +791,8 @@ impl Draft {
     /// The row `shape` names; a deposit or a withdrawal takes a fresh tx id.
     fn malformed_row(&mut self, shape: Shape) {
         let row = match shape {
-            Shape::Unreadable => InputRow::Unreadable,
-            Shape::TooManyFields => InputRow::TooManyFields,
+            Shape::Unreadable(flaw) => InputRow::Unreadable(flaw),
+            Shape::TooManyFields { first, rest } => InputRow::TooManyFields { first, rest },
             Shape::Fields { client, is_deposit, spelling } => {
                 let kind = if is_deposit { Kind::Deposit } else { Kind::Withdrawal };
                 InputRow::Fields {

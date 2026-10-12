@@ -46,8 +46,8 @@ deps: ## Fail when the build graph holds a crate no decision record admits, or t
 
 ci: deps fmt-check lint build test ## The commit gate
 
-run: ## Run the cthulhu binary
-	$(CARGO) run --locked --bin cthulhu
+run: ## Run the cthulhu binary on INPUT, the table on stdout: make run INPUT=<file>
+	@$(CARGO) run --locked --bin cthulhu -- $${INPUT:+"$$INPUT"}
 
 clean: ## Remove build output
 	$(CARGO) clean

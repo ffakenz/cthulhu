@@ -95,9 +95,9 @@ The person signed off this plan as written.
 
 - [x] **0.** The worktree and the branch; the archive and the link; this plan. Commit
       `docs(tasks): keep the workspace plan and plan the model-free tests`.
-- [ ] **1.** The record, its index line and the superseded record's Status line. Commit
+- [x] **1.** The record, its index line and the superseded record's Status line. Commit
       `docs(adr): record correctness defined by equations between runs`.
-- [ ] **2.** The new suite replaces the old, with `make ci` green. These are characterisation
+- [x] **2.** The new suite replaces the old, with `make ci` green. These are characterisation
       tests: the behaviour already works. Commit
       `test(it): check the engine by equations between its own runs`.
 - [ ] **3.** Law evidence, run in a scratch copy, never in the repo. Every recorded break of the

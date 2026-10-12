@@ -1,181 +1,69 @@
-//! Laws of the runtime: rows spelled as CSV text and read by the CSV source, then through intake,
-//! the decider and the stores, against the overview's laws and the naive model; and the runtime's
-//! contract with any source.
+//! The runtime through the CSV source, over fresh in-memory stores, held to equations between its
+//! runs: clients run independently, and suffixes the rules make equivalent leave the same
+//! accounts after any rows. A source error stops the run, and the input as the overview spells it
+//! reads as its plainest spelling.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::convert::Infallible;
-use std::num::NonZeroU64;
+use std::io::{self, Read};
+use std::iter;
 
 use app::csv_io::CsvSource;
-use engine::domain::{Account, Balance, ClientId, ClientReason, Command, Reason};
-use engine::run::{Row, RowError, RunError, SourceError, Summary};
-use proptest::arbitrary::any;
-use proptest::sample::{Index, select};
+use engine::run::{Row, RowError, RunError, SourceError, run};
+use proptest::collection::vec;
+use proptest::sample::select;
 use proptest::strategy::Strategy;
+use store::memory::{MemoryLedger, MemorySeenIds};
 
-use crate::support::generate::{self, InputRow, Unique};
-use crate::support::model::{Printed, PrintedAccount};
-use crate::support::spelling::{self, Input};
-use crate::support::{self, model};
+use crate::support;
 
-type Source = Vec<Result<Row, SourceError>>;
+/// The types a line may name.
+const KINDS: [&str; 5] = ["deposit", "withdrawal", "dispute", "resolve", "chargeback"];
 
-/// What a source would yield for `rows`, every one readable.
-fn source(rows: &[InputRow]) -> Source {
-    rows.iter().map(|input| Ok(generate::row(input))).collect()
+/// Amounts at mixed scales: the smallest, a whole one, one with a single decimal, two that differ
+/// only in their fourth decimal, and the largest an amount may be.
+const AMOUNTS: [&str; 6] = ["0.0001", "1", "2.5", "711.6569", "711.657", "999999999999999.9999"];
+
+/// A line of CSV input: its type, client, tx id and amount.
+#[derive(Debug, Clone, Copy)]
+struct Line {
+    kind: &'static str,
+    client: u16,
+    tx: u32,
+    amount: &'static str,
 }
 
-/// `input` through the CSV source and `run`, over fresh stores.
-fn summarized(input: &Input) -> Result<Summary, RunError<Infallible, Infallible>> {
-    support::summarize(CsvSource::new(input.text().as_slice()))
+/// Up to sixteen lines of any type, by clients 1 to 3, on tx ids below 8, for amounts from
+/// `AMOUNTS`.
+fn lines() -> impl Strategy<Value = Vec<Line>> {
+    let line = (select(&KINDS), 1..=3_u16, 0..8_u32, select(&AMOUNTS))
+        .prop_map(|(kind, client, tx, amount)| Line { kind, client, tx, amount });
+    vec(line, 0..=16)
 }
 
-/// The summary as the output would print it.
-fn printed(summary: &Summary) -> Printed {
-    Printed {
-        accounts: summary
-            .accounts
-            .by_client()
-            .map(|(client, account)| PrintedAccount {
-                client,
-                available: account.available().to_string(),
-                held: account.held().to_string(),
-                total: account.total().map(|total| total.to_string()),
-                locked: account.is_locked(),
-            })
-            .collect(),
-        rejected: summary.report.rejected().collect(),
-        malformed: summary.report.malformed().collect(),
-    }
-}
-
-/// How many rows `summary` reports rejected.
-fn rejections(summary: &Summary) -> u64 {
-    summary.report.rejected().fold(0, |sum, (_, count)| sum.saturating_add(count.get()))
-}
-
-/// Whether `after` keeps every account `before` holds as it was, and holds any other only as
-/// opened: zero available and held, unlocked.
-fn unchanged_but_opened(before: &Summary, after: &Summary) -> bool {
-    let earlier: BTreeMap<ClientId, Account> = before.accounts.by_client().collect();
-    let later: BTreeMap<ClientId, Account> = after.accounts.by_client().collect();
-    earlier.keys().all(|client| later.contains_key(client))
-        && later.iter().all(|(client, account)| match earlier.get(client) {
-            Some(previous) => previous == account,
-            None => {
-                account.available() == Balance::ZERO
-                    && account.held() == Balance::ZERO
-                    && !account.is_locked()
-            }
-        })
-}
-
-/// The source errors, each named once.
-const SOURCE_ERRORS: [SourceError; 2] = [SourceError::Unreadable, SourceError::IncompleteHeader];
-
-/// Rows, and the source error a source meets before the row at `position`.
-#[derive(Debug, Clone)]
-struct BrokenSource {
-    rows: Vec<InputRow>,
-    position: usize,
-    first: SourceError,
-}
-
-/// Rows with a source error at a drawn position.
-fn broken_source() -> impl Strategy<Value = BrokenSource> {
-    (generate::rows(), any::<Index>(), select(&SOURCE_ERRORS)).prop_map(
-        |(rows, position, first)| {
-            let position = position.index(rows.len().saturating_add(1));
-            BrokenSource { rows, position, first }
-        },
-    )
-}
-
-/// A drawn input, its rows made unique, and those rows with the clients' turns reordered; the law
-/// spells both under the input's layout.
-#[derive(Debug, Clone)]
-struct Reordering {
-    input: Input,
-    original: Unique,
-    interleaved: Unique,
-}
-
-/// Generated rows made unique, and an interleaving of them, under a drawn layout.
-fn reordering() -> impl Strategy<Value = Reordering> {
-    (spelling::input(), generate::turns()).prop_map(|(input, turns)| {
-        let original = generate::unique(input.rows());
-        let interleaved = generate::interleave(&original, &turns);
-        Reordering { input, original, interleaved }
-    })
-}
-
-/// Whether `input` reads as a command.
-fn parses(input: &InputRow) -> bool {
-    match generate::row(input) {
-        Row::Parsed(_) => true,
-        Row::Malformed(_) => false,
-    }
-}
-
-/// The malformed rows of `rows`, counted by kind.
-fn malformed_counts(rows: &[InputRow]) -> BTreeMap<RowError, NonZeroU64> {
-    rows.iter().fold(BTreeMap::new(), |mut counts, input| {
-        match generate::row(input) {
-            Row::Malformed(error) => model::count(&mut counts, error),
-            Row::Parsed(_) => {}
-        }
-        counts
+/// `lines` as CSV text, under the header `type,client,tx,amount`.
+fn text(lines: &[Line]) -> String {
+    lines.iter().fold(String::from("type,client,tx,amount\n"), |csv, line| {
+        csv + &format!("{},{},{},{}\n", line.kind, line.client, line.tx, line.amount)
     })
 }
 
 #[test]
-fn prop_tx_ids_are_consumed_on_first_sight_across_clients() {
+fn prop_clients_run_independently() {
     let law = support::for_all(
-        "a tx id is consumed by the first deposit or withdrawal naming it, whatever its outcome, for every client",
-        spelling::input(),
-        |input| {
-            let mut used = BTreeSet::new();
-            let repeats = input
-                .rows()
+        "lines of different clients give the same summary in any order, given distinct tx ids",
+        lines(),
+        |drawn| {
+            let distinct: Vec<Line> = drawn
                 .iter()
-                .filter(|row| match generate::row(row) {
-                    Row::Parsed(Command::Client(command)) => !used.insert(command.address().tx()),
-                    Row::Parsed(Command::Dispute(_)) | Row::Malformed(_) => false,
+                .zip(0_u32..)
+                .map(|(&line, position)| match line.kind {
+                    "deposit" | "withdrawal" => Line { tx: position, ..line },
+                    _ => line,
                 })
-                .count();
-            summarized(input).is_ok_and(|summary| {
-                let duplicates = summary
-                    .report
-                    .rejected()
-                    .find(|&(reason, _)| reason == Reason::Client(ClientReason::DuplicateTx))
-                    .map_or(0, |(_, count)| count.get());
-                u64::try_from(repeats).is_ok_and(|repeats| repeats == duplicates)
-            })
-        },
-    );
-    if let Err(failure) = law {
-        panic!("{failure}");
-    }
-}
-
-#[test]
-fn prop_rejection_changes_no_balance() {
-    let law = support::for_all(
-        "a rejection changes no balance; a client with no account counts as zero",
-        spelling::input(),
-        |input| {
-            let summaries: Option<Vec<Summary>> = (0..=input.rows().len())
-                .map(|end| input.prefix(end).and_then(|prefix| summarized(&prefix).ok()))
                 .collect();
-            summaries.is_some_and(|summaries| {
-                summaries.windows(2).all(|pair| match pair {
-                    [before, after] => {
-                        rejections(after) == rejections(before)
-                            || unchanged_but_opened(before, after)
-                    }
-                    _ => false,
-                })
-            })
+            let mut by_client = distinct.clone();
+            by_client.sort_by_key(|line| line.client);
+            support::summary(text(&distinct).as_bytes())
+                == support::summary(text(&by_client).as_bytes())
         },
     );
     if let Err(failure) = law {
@@ -183,48 +71,77 @@ fn prop_rejection_changes_no_balance() {
     }
 }
 
-#[test]
-fn prop_malformed_rows_are_skipped_and_counted() {
-    let law = support::for_all(
-        "a malformed row changes no account and no rejection, and is counted by kind",
-        spelling::input(),
-        |input| {
-            let parsed: Vec<InputRow> =
-                input.rows().iter().filter(|row| parses(row)).cloned().collect();
-            let expected = malformed_counts(input.rows());
-            match (summarized(input), summarized(&input.with_rows(parsed))) {
-                (Ok(all), Ok(without)) => {
-                    all.accounts == without.accounts
-                        && all.report.rejected().eq(without.report.rejected())
-                        && all.report.malformed().eq(expected.iter().map(|(&e, &n)| (e, n)))
-                        && without.report.malformed().next().is_none()
-                }
-                _ => false,
-            }
-        },
-    );
-    if let Err(failure) = law {
-        panic!("{failure}");
-    }
+/// Pairs of suffixes that leave the same accounts after any lines, each under the rule it pins:
+/// `c` is the drawn client, `o` another and `F` one no line names; `a` and `b` are the drawn
+/// amounts; `X`, `Y` and `Z` are tx ids no line names.
+fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
+    const F: u16 = 9;
+    const X: u32 = 100;
+    const Y: u32 = 101;
+    const Z: u32 = 102;
+    let o = c % 3 + 1;
+    let deposit = format!("deposit,{c},{X},{a}\n");
+    let held = format!("{deposit}dispute,{c},{X}\n");
+    let charged = format!("{held}chargeback,{c},{X}\n");
+    let other = format!("deposit,{c},{Y},{b}\n");
+    let withdrawal = format!("withdrawal,{c},{X},{a}\n");
+    let fresh = format!("deposit,{F},{X},{a}\n");
+    let fresh_held = format!("{fresh}dispute,{F},{X}\n");
+    [
+        // A resolve releases what its dispute held.
+        (format!("{held}resolve,{c},{X}\n"), deposit.clone()),
+        // A resolve or a chargeback of a deposit no dispute holds changes nothing.
+        (format!("{deposit}resolve,{c},{X}\nchargeback,{c},{X}\n"), deposit.clone()),
+        // A second dispute of a held deposit changes nothing.
+        (format!("{held}dispute,{c},{X}\n"), held.clone()),
+        // A chargeback takes back exactly what its deposit added, whatever the amount, and locks.
+        (charged.clone(), format!("{other}dispute,{c},{Y}\nchargeback,{c},{Y}\n")),
+        // A locked account refuses deposits.
+        (format!("{charged}{other}"), charged.clone()),
+        // A locked account refuses withdrawals.
+        (format!("{charged}withdrawal,{c},{Y},{b}\n"), charged.clone()),
+        // A charged-back deposit leaves history: a resolve finds nothing to release.
+        (format!("{charged}resolve,{c},{X}\n"), charged.clone()),
+        // A charged-back deposit leaves history: a dispute finds nothing to hold.
+        (format!("{charged}dispute,{c},{X}\n"), charged.clone()),
+        // Dispute commands still apply on a locked account.
+        (
+            format!("{other}{charged}dispute,{c},{Y}\n"),
+            format!("{other}dispute,{c},{Y}\n{charged}"),
+        ),
+        // A tx id is spent by its first deposit or withdrawal, refused or not, for every client.
+        (
+            format!("{withdrawal}withdrawal,{o},{X},{b}\ndeposit,{c},{X},{b}\n"),
+            format!("{withdrawal}dispute,{o},{Z}\n"),
+        ),
+        // A dispute reaches only its own client's deposits.
+        (format!("{deposit}dispute,{o},{X}\n"), format!("{deposit}dispute,{o},{Z}\n")),
+        // A withdrawal is not in history: a dispute finds nothing to hold.
+        (format!("{withdrawal}dispute,{c},{X}\n"), format!("{withdrawal}dispute,{c},{Z}\n")),
+        // A withdrawal of all the available funds is accepted and leaves zero.
+        (format!("{fresh}withdrawal,{F},{Y},{a}\n"), format!("dispute,{F},{Z}\n")),
+        // Held funds cannot be withdrawn.
+        (format!("{fresh_held}withdrawal,{F},{Y},{a}\n"), fresh_held),
+        // A malformed row opens no account and spends no tx id.
+        (format!("deposit,{F},{X},0\n{deposit}"), deposit),
+    ]
 }
 
 #[test]
-fn prop_source_error_stops_the_run_with_no_summary() {
+fn prop_equivalent_commands_leave_the_same_accounts() {
     let law = support::for_all(
-        "an unreadable source stops the run: the first source error is the result, and nothing after it is read",
-        broken_source(),
-        |BrokenSource { rows, position, first }| {
-            let last = match first {
-                SourceError::Unreadable => SourceError::IncompleteHeader,
-                SourceError::IncompleteHeader => SourceError::Unreadable,
+        "each pair of equivalent suffixes leaves the same accounts after any lines",
+        (lines(), 1..=3_u16, select(&AMOUNTS), select(&AMOUNTS)),
+        |(drawn, client, first, second)| {
+            let prefix = text(drawn);
+            let accounts = |suffix: &str| {
+                support::summary(format!("{prefix}{suffix}").as_bytes())
+                    .map(|summary| summary.accounts)
             };
-            let mut items = source(rows);
-            items.insert((*position).min(items.len()), Err(*first));
-            items.push(Err(last));
-            let unread = items.len().saturating_sub(position.saturating_add(1));
-            let mut rest = items.into_iter();
-            support::summarize(rest.by_ref()) == Err(RunError::Source(*first))
-                && rest.len() == unread
+            for (left, right) in pairs(*client, first, second) {
+                assert_eq!(accounts(&left), accounts(&right), "{left:?} and {right:?} differ");
+            }
+            true
         },
     );
     if let Err(failure) = law {
@@ -232,68 +149,53 @@ fn prop_source_error_stops_the_run_with_no_summary() {
     }
 }
 
-#[test]
-fn prop_report_stays_bounded() {
-    let law = support::for_all(
-        "the report holds one count per kind, however many rows",
-        spelling::input(),
-        |input| {
-            let malformed_rows = malformed_counts(input.rows())
-                .values()
-                .fold(0_u64, |sum, count| sum.saturating_add(count.get()));
-            summarized(input).is_ok_and(|summary| {
-                let reasons: Vec<Reason> = summary.report.rejected().map(|(key, _)| key).collect();
-                let kinds: Vec<RowError> = summary.report.malformed().map(|(key, _)| key).collect();
-                let counted = summary
-                    .report
-                    .malformed()
-                    .fold(0_u64, |sum, (_, count)| sum.saturating_add(count.get()));
-                reasons.windows(2).all(|pair| matches!(pair, [a, b] if a < b))
-                    && kinds.windows(2).all(|pair| matches!(pair, [a, b] if a < b))
-                    && counted == malformed_rows
-            })
-        },
-    );
-    if let Err(failure) = law {
-        panic!("{failure}");
+/// A reader whose every read fails.
+#[derive(Debug)]
+struct Failing;
+
+impl Read for Failing {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("the input is gone"))
     }
 }
 
 #[test]
-fn prop_same_rows_give_the_same_summary() {
-    let law = support::for_all("the same rows give the same summary", spelling::input(), |input| {
-        summarized(input) == summarized(input)
-    });
-    if let Err(failure) = law {
-        panic!("{failure}");
-    }
+fn a_source_error_stops_the_run_before_the_next_row_is_read() {
+    let mut pulled = 0_u8;
+    let source = CsvSource::new(b"type,client,tx,amount\n".as_slice().chain(Failing))
+        .take(2)
+        .chain(iter::repeat_n(Ok(Row::Malformed(RowError::Unreadable)), 3))
+        .inspect(|_| pulled += 1);
+    let outcome = run(source, &mut MemoryLedger::default(), &mut MemorySeenIds::default());
+    assert_eq!(outcome, Err(RunError::Source(SourceError::Unreadable)));
+    assert_eq!(pulled, 1);
 }
 
-#[test]
-fn prop_reordering_clients_changes_no_account() {
-    let law = support::for_all(
-        "reordering rows of different clients changes no account, given unique tx ids",
-        reordering(),
-        |Reordering { input, original, interleaved }| match (
-            summarized(&input.with_rows(original.rows().to_vec())),
-            summarized(&input.with_rows(interleaved.rows().to_vec())),
-        ) {
-            (Ok(original), Ok(reordered)) => original.accounts == reordered.accounts,
-            _ => false,
-        },
-    );
-    if let Err(failure) = law {
-        panic!("{failure}");
-    }
-}
+/// Lines in the plainest spelling: a deposit, a withdrawal, a dispute, a malformed line and a
+/// resolve, all by client 1.
+const PLAIN: &[u8] = b"\
+type,client,tx,amount
+deposit,1,1,2.5
+withdrawal,1,2,1
+dispute,1,1,
+Deposit,1,3,1
+resolve,1,1,
+";
+
+/// The same lines as the overview allows them: a byte-order mark; the columns in another order,
+/// padded, with one no line needs; CRLF line ends and a blank line; a padded field, a quoted one
+/// and a client spelled `0x1`; a dispute that stops before its amount; a line that is not UTF-8;
+/// and a resolve that carries an amount.
+const RESPELLED: &[u8] = b"\xEF\xBB\xBFtx , type,note, client ,amount\r\n\
+    \r\n\
+    1,deposit , x,0x1,\"2.5\"\r\n\
+    \x202, withdrawal,,1,1\r\n\
+    1,dispute,,1\r\n\
+    3,\xFF,,1,1\r\n\
+    1,resolve,,1,9\r\n";
 
 #[test]
-fn prop_engine_agrees_with_the_naive_model() {
-    let law =
-        support::for_all("run reports what the naive model expects", spelling::input(), |input| {
-            summarized(input).is_ok_and(|summary| printed(&summary) == model::printed(input.rows()))
-        });
-    if let Err(failure) = law {
-        panic!("{failure}");
-    }
+fn the_input_as_the_overview_spells_it_reads_as_its_plainest_spelling() {
+    let plain = support::summary(PLAIN).expect("the plainest spelling runs");
+    assert_eq!(support::summary(RESPELLED), Ok(plain));
 }

@@ -1,15 +1,13 @@
 //! Property-test support: a runner that checks a law on the inputs a strategy draws, and reports
-//! the smallest input it found that breaks the law; and `run` over fresh in-memory stores.
-
-pub(crate) mod generate;
-pub(crate) mod model;
-pub(crate) mod spelling;
+//! the smallest input it found that breaks the law; and `run` over CSV text and fresh in-memory
+//! stores.
 
 use std::convert::Infallible;
 use std::fmt;
 use std::panic::Location;
 
-use engine::run::{Row, RunError, SourceError, Summary, run};
+use app::csv_io::CsvSource;
+use engine::run::{RunError, Summary, run};
 use proptest::strategy::Strategy;
 use proptest::test_runner::{Config, TestCaseError, TestError, TestRunner, contextualize_config};
 use store::memory::{MemoryLedger, MemorySeenIds};
@@ -64,17 +62,7 @@ pub(crate) fn for_all<S: Strategy>(
     })
 }
 
-/// `run` over `source` and fresh in-memory stores.
-pub(crate) fn summarize(
-    source: impl IntoIterator<Item = Result<Row, SourceError>>,
-) -> Result<Summary, RunError<Infallible, Infallible>> {
-    run(source, &mut MemoryLedger::default(), &mut MemorySeenIds::default())
-}
-
-/// The value of a result whose error cannot be built.
-pub(crate) fn infallible<T>(result: Result<T, Infallible>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(never) => match never {},
-    }
+/// What `run` makes of `text` through the CSV source, over fresh in-memory stores.
+pub(crate) fn summary(text: &[u8]) -> Result<Summary, RunError<Infallible, Infallible>> {
+    run(CsvSource::new(text), &mut MemoryLedger::default(), &mut MemorySeenIds::default())
 }

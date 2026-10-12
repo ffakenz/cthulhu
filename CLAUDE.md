@@ -29,6 +29,7 @@ cthulhu/
 ├── Makefile              targets; `make ci` is the commit gate
 ├── README.md             setup and usage
 ├── CLAUDE.md             this file
+├── transactions.csv      a sample input: `cargo run -- transactions.csv`
 ├── backend/              package `backend`, binary `cthulhu`
 │   ├── src/
 │   │   ├── lib.rs        the library: core, runtime and adapters

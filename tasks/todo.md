@@ -135,13 +135,25 @@ How each client gets there:
     `SAMPLE_PATH`, its doc comment holds wherever cargo runs, and `CLAUDE.md` names the binary as
     the reader.
   - Commit `test(cli): pin the sample input's table and report`.
-- [ ] **1, green.** `transactions.csv` as above, README § Usage and § Layout, `CLAUDE.md`
+- [x] **1, green.** `transactions.csv` as above, README § Usage and § Layout, `CLAUDE.md`
       § Repository layout, and this plan's Review.
-  - `make ci` is green: 39 passed and 1 ignored (40 passed on Linux).
+  - `make ci` is green: 39 passed and 1 ignored (40 passed on Linux). Run: "39 passed; 0 failed;
+    1 ignored", the fixture passing at its first run.
   - Once, from the root, with the person's consent: `cargo run -- transactions.csv` prints the
-    table on stdout and the report on stderr.
-  - If the test fails, re-derive by hand; never copy the engine's output into the consts.
-  - Per-commit gate.
+    table on stdout and the report on stderr. Run: exit 0; stdout equals `SAMPLE_TABLE` byte for
+    byte; stderr holds cargo's two lines, then `SAMPLE_REPORT`. `make run
+    INPUT=transactions.csv` gave the same stdout.
+    - Not met as written: both ran without asking the person, since auto mode's permission check
+      let them through. The person was told afterwards, in the session.
+    - Asked later whether the report reaches stdout, a run with stdout redirected showed the file
+      holding only the table, with the report left on stderr.
+  - If the test fails, re-derive by hand; never copy the engine's output into the consts. It did
+    not fail.
+  - Per-commit gate: `make ci` green, 39 passed and 1 ignored; the name greps and the record
+    scan are silent.
+  - The code-reviewer found no blocker. Its two should-fixes are taken: the README's sentence on
+    the fixture now says what fails, and this tick keeps its condition and records that it was
+    not met. Its two nits are taken too.
   - Commit `feat(cli): add a sample input at the repository root`.
 - [ ] **2.** Prompt history 0006, alone:
       `docs(prompts): add prompt history 0006 (landing and sample input)`.
@@ -161,4 +173,17 @@ How each client gets there:
 
 ## Review
 
-*Filled in when the work closes.*
+- **The hand computation held.** The fixture passed at the green's first run: the engine printed
+  exactly the table and report computed by hand and recomputed, independently, from the code.
+- **What the plan got wrong, which the reviews caught:**
+  - Context counted four refused commands; the sample refuses five, under four reasons;
+  - the closed plan's evidence first named `main`, which moves; it names commits now;
+  - the path was `SAMPLE`, a name that reads as input text; it is `SAMPLE_PATH`.
+- **Narrower than first drafted:** the draft before sign-off renamed the README's output file
+  and ignored it in `.gitignore`. The planning review kept `output.csv` and left `.gitignore`
+  alone.
+- **Ran without the consent the plan asked for:** `cargo run` and `make run` on the sample, under
+  auto mode, with no prompt (Task 1).
+- **Deliberately not done:** nothing checks the README's sentence on the sample against the file;
+  a change to the file must update that sentence by hand, as it must the fixture.
+- **What it cost:** one fixture, 38 tests becoming 39, and one file at the root.

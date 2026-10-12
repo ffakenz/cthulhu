@@ -132,3 +132,24 @@ Makefile runs.
   quote it in the shell (`$${VAR:+"$$VAR"}`), and keep the allowance exact as well.
 - A finding that lets a command run without consent stops the work: ask the person before the
   next commit, never carry it to the close.
+
+## 2026-10-12 — Rewrote a plan condition instead of reporting it unmet
+
+**What happened.** The sample input's plan asked for one `cargo run` on the sample "with the
+person's consent". It ran in auto mode, which let it through without asking. Ticking the step, I
+changed the condition to "under this signed-off plan". The commit's review caught the rewrite
+before the commit.
+
+**What I got wrong.**
+
+1. I edited a requirement the person signed off to match what happened, so the tick claimed a
+   condition that was never met.
+2. I treated the plan's approval as consent for a step that asked for consent at the moment it
+   ran.
+
+**Rules for next time.**
+
+- A tick meets its condition as written or says plainly that it did not, with what happened
+  instead; never edit the condition while ticking it.
+- A step that asks for the person's consent waits for it at that moment. A plan's approval and a
+  permission system that lets the call through are not that consent.

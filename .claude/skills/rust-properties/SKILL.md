@@ -57,6 +57,15 @@ generated spellings, near-misses included: every spelling that parses re-renders
   `FromStr`, never a test-only constructor, so every counterexample, shrunk or not, is a value
   production can receive. Keep sizes small (a few characters, a dozen steps): shrinking is faster
   and the counterexample shorter.
+- **One generator per field, composed into the input.** Each field draws its value from its whole
+  domain and its spelling from every form the input admits, and a line composes the fields.
+  Failure has generators of its own: a flaw per field, composed with valid fields, makes a
+  malformed input that knows how it must fail.
+- **A property checks success or failure, never both.** Valid input comes from the valid
+  generators and malformed input from the flaws, and each law asserts the one outcome its input
+  must have: a law that expects `Ok` for some draws and a given `Err` for others is two laws. A law
+  over raw text that only asks what parses to render back, as the reverse round trip does, asserts
+  no failure.
 - **Bias the strategy toward the edges.** `prop_oneof![3 => ordinary, 1 => edge]` sends one draw
   in four to an edge: zero, empty, `MAX` and one past it, the status just before a terminal one.
   Uniform draws over a `u32` reach zero about once in four billion. List first the arm a
@@ -71,6 +80,10 @@ generated spellings, near-misses included: every spelling that parses re-renders
   the run after too many. A strategy that builds only the inputs it means never runs out.
 - **A law replaces the examples it covers.** Delete the hand-picked examples it quantifies over;
   keep the black-box tests it does not reach.
+- **A generator is replaced only by one that writes every form it wrote.** Before deleting a
+  generator, list the input forms it produced; each form the contract admits stays generated,
+  whether or not a recorded break needs it. The recorded breaks are evidence of coverage, not its
+  definition.
 - **Properties live on the pure core:** parsers, folds, arithmetic, decisions and transitions,
   where a strategy reaches further than any fixture. The black-box backbone stays primary
   ([[functional-architecture]]).

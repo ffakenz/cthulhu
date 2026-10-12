@@ -170,3 +170,37 @@ approvals. The person corrected the scope: that wait is not the problem; the age
 
 - A session's time splits three ways: the agent working, the agent idle on its subagents, and
   the agent blocked on the person. Report the first two; the third only when the person asks.
+
+## 2026-10-12 — Mixed success and failure in one property, and narrowed the spellings
+
+**What happened.** The model-free tests replaced the generated CSV spellings with one hand-written
+example, and two of their properties checked a valid input and a malformed one together:
+- the amount round trip accepted either `Ok` or the right `Err` in one law;
+- an equation about valid commands slipped a malformed row among them.
+
+The person asked for one generator per field, composed into a line, with malformed input made by
+generators of its own, and for success and failure never to share a property.
+
+**What I got wrong.**
+
+1. I measured "fewest lines" against the recorded breaks alone. That traded the input domain the
+   contract admits for the one example the breaks happened to need. The branch review then found
+   five behaviours the old generators pinned and no recorded break exercised: a dispute's refused
+   amount, a header without `amount`, a header lacking `type` or `client`, zero reached from below,
+   and the order of the amount refusals.
+2. I let a law branch on the outcome it checked. A law that passes on either `Ok` or the right
+   `Err` is two laws, and when it fails it does not say which half broke.
+3. I put the failure tier's law inside the engine's: a malformed row inside an equation about valid
+   commands.
+
+**Rules for next time.**
+
+- Build input from one generator per field, composed into a line. Each field draws its value from
+  its whole domain and its spelling from every form the contract admits.
+- Give failure generators of its own: a flaw per field, composed with valid fields, so the
+  malformed input knows how it must fail. Give it properties of its own too: a property checks
+  success or failure, never both.
+- Before deleting a generator, list every input form it produced. Each form the contract admits
+  stays generated, whether or not a recorded break needs it: the recorded breaks are evidence of
+  coverage, not its definition.
+- These rules graduated into `.claude/skills/rust-properties/SKILL.md`.

@@ -391,8 +391,8 @@ decision record ([[architecture-decisions]]).
   `Command::new(env!("CARGO_BIN_EXE_cthulhu"))`, or `engine`'s entry point, `run`, with in-memory
   ports.
 - **One test crate.** Cargo builds each file directly under `tests/` as a separate crate, so the
-  tests live in one: `app/tests/it/main.rs`, with a module per library module (`it/order.rs`
-  tests the module `order`, whichever package holds it) and shared helpers in `it/support.rs`.
+  tests live in one: `app/tests/it/main.rs`, with a module per surface the tests drive (`it/run.rs`
+  drives the runtime, `it/cli.rs` the binary) and shared helpers in `it/support.rs`.
 - **Unit tests only for pure folds** that are awkward to reach from outside (a `decide`, a
   `disposition`, a parser's edge), in a `#[cfg(test)] mod tests` beside the code.
 - **Names state the behaviour:** `refuses_a_quantity_with_a_leading_zero`, never `test_parse_2`.
@@ -413,7 +413,7 @@ decision record ([[architecture-decisions]]).
 - **Naming.** `UpperCamelCase` for types, traits and variants; `snake_case` for functions, modules
   and variables; `SCREAMING_SNAKE_CASE` for constants and statics. rustc's `nonstandard_style`
   lints warn on the rest. A module is named for the concept it holds (`order`, `journal`), never
-  `utils`, `common` or `helpers`; test modules mirror source modules.
+  `utils`, `common` or `helpers`; test modules are named for the surface they drive.
 - **Imports.** std through its module where the bare name is ambiguous (`io::Error`, `fmt::Result`,
   `error::Error`); crate items by name (`use crate::order::Quantity;`). No glob imports except
   `use super::*` in a unit-test module, which pedantic `wildcard_imports` exempts.

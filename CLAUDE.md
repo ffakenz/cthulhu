@@ -38,7 +38,7 @@ cthulhu/
 │   │   ├── csv_io.rs     the CSV adapters
 │   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
-│   └── tests/it/         the black-box test crate: laws, strategies and the model
+│   └── tests/it/         the black-box test crate: laws, generators and fixtures
 ├── libs/
 │   ├── engine/           package `engine`: the domain, the decider and the runtime
 │   │   └── src/
@@ -181,12 +181,17 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
   under test.
 - Nothing in production code may exist only for testing.
 - Black-box tests live in `app/tests/it` and see only the public APIs of `engine`, `store` and
-  `app`: one test crate, `main.rs` plus modules that mirror the libraries' modules, and
-  `support.rs` for helpers: `for_all`, which runs each law on `proptest`, the strategies in
-  `support/generate.rs`, the rows spelled as CSV text in `support/spelling.rs` and the naive model
-  in `support/model.rs`. `cli.rs` drives the binary through `CARGO_BIN_EXE_cthulhu`, each fixture's
-  input written into `CARGO_TARGET_TMPDIR`, except the sample input, which the binary reads from
-  the repository root.
+  `app`. They form one test crate:
+  - `main.rs`, plus a module for each surface the tests drive: `run.rs`, the runtime through the
+    CSV source; `domain.rs`, money; and `cli.rs`, the binary.
+  - `support.rs` holds the helpers: `for_all`, which runs each law on `proptest`; `summary`, which
+    runs CSV text over fresh in-memory stores; and, in `support/input.rs`, a generator for each
+    field, composed into valid and malformed lines.
+  - `cli.rs` drives the binary through `CARGO_BIN_EXE_cthulhu`, each fixture's input written into
+    `CARGO_TARGET_TMPDIR`, except the sample input, which the binary reads from the repository
+    root.
+- No test re-implements the engine: a law compares runs of the engine with each other, and a
+  fixture holds an output computed by hand.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments

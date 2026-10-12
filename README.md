@@ -81,7 +81,7 @@ streams and the exit status; [docs/overview.md](docs/overview.md) gives the form
 │   │   ├── csv_io.rs     the CSV adapters
 │   │   ├── text_io.rs    the text adapter: the report
 │   │   └── main.rs       the composition root
-│   └── tests/it/         the black-box test crate: laws, strategies and the model
+│   └── tests/it/         the black-box test crate: laws, generators and fixtures
 ├── libs/
 │   ├── engine/           package `engine`: the domain, the decider and the runtime
 │   │   └── src/

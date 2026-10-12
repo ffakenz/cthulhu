@@ -31,8 +31,8 @@ async runtime or a disk store, needs its own decision record first.
 ## 1. Sequential reference (now)
 
 - Adds: the domain types, the core, the store ports with in-memory stores, the sequential `run`,
-  the CSV adapters and the report's text adapter, the laws, the model and the fixtures; `make run`
-  takes an input file.
+  the CSV adapters and the report's text adapter, the laws and the fixtures; `make run` takes an
+  input file.
 - Expects: bound by decoding. A throwaway probe decoded 2.5M to 4.4M rows/s on one thread with
   `csv` and `serde`.
 - Follow-ups, each kept only if measured faster:

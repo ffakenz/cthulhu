@@ -94,12 +94,16 @@ const REJECTED_AND_MALFORMED_REPORT: &str = "\
 const HEADER_ONLY: &str = "type,client,tx,amount\n";
 
 /// An empty input, which has no header.
-const EMPTY: &str = "";
+const EMPTY: &[u8] = b"";
 
 /// A header without `tx`, then a row.
-const NO_TX: &str = "type, client, amount\ndeposit, 1, 1.0\n";
+const NO_TX: &[u8] = b"type, client, amount\ndeposit, 1, 1.0\n";
+
+/// A header whose first name holds a byte that is not UTF-8, then a row.
+const NOT_UTF8_HEADER: &[u8] = b"type\xff,client,tx,amount\ndeposit,1,1,1.0\n";
 
 /// One deposit.
+#[cfg(unix)]
 const ONE_DEPOSIT: &str = "type,client,tx,amount\ndeposit,1,1,1.0\n";
 
 /// The table for `HEADER_ONLY`: the header and no rows.
@@ -178,6 +182,7 @@ fn cthulhu_in(directory: &Path, arguments: &[&Path]) -> io::Result<Output> {
 }
 
 /// Runs the binary with `arguments`, its stdout written to `stdout`.
+#[cfg(unix)]
 fn cthulhu_into(stdout: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stdout(stdout).output()
 }
@@ -206,11 +211,20 @@ fn scratch() -> io::Result<PathBuf> {
     Ok(directory)
 }
 
-/// A file named `name` in the scratch directory, holding `text`.
-fn input(name: &str, text: &str) -> io::Result<PathBuf> {
+/// A file named `name` in the scratch directory, holding `contents`.
+fn input(name: &str, contents: impl AsRef<[u8]>) -> io::Result<PathBuf> {
     let path = scratch()?.join(name);
-    fs::write(&path, text)?;
+    fs::write(&path, contents)?;
     Ok(path)
+}
+
+/// One deposit by each client from 1 to `clients`: the table of three hundred is longer than the
+/// CSV writer's 8 KiB buffer, where the table of one fits.
+#[cfg(unix)]
+fn deposits(clients: u16) -> String {
+    (1..=clients).fold(String::from("type,client,tx,amount\n"), |text, client| {
+        text + &format!("deposit,{client},{client},1.0\n")
+    })
 }
 
 /// The code block after the line `label` in the overview.
@@ -348,7 +362,9 @@ fn an_unreadable_input_stops_the_run_with_no_table() {
 
 #[test]
 fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
-    for (name, text) in [("empty.csv", EMPTY), ("no-tx.csv", NO_TX)] {
+    for (name, text) in
+        [("empty.csv", EMPTY), ("no-tx.csv", NO_TX), ("not-utf8.csv", NOT_UTF8_HEADER)]
+    {
         let path = input(name, text).expect("the scratch directory takes a file");
         let output = cthulhu(&[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(4));
@@ -360,17 +376,21 @@ fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
     }
 }
 
+#[cfg(unix)]
 #[test]
-#[cfg_attr(not(target_os = "linux"), ignore = "/dev/full exists only on Linux")]
-fn a_full_output_is_a_write_failure() {
-    let path = input("full.csv", ONE_DEPOSIT).expect("the scratch directory takes a file");
-    let full = fs::File::options().write(true).open("/dev/full").expect("/dev/full opens");
-    let output = cthulhu_into(full, &[&path]).expect("the binary runs");
-    assert_eq!(output.status.code(), Some(5));
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        format!("error: {}\n", SinkError::Unwritable)
-    );
+fn a_table_that_cannot_be_written_is_a_write_failure() {
+    for (name, text) in
+        [("one-deposit.csv", ONE_DEPOSIT.to_owned()), ("deposits.csv", deposits(300))]
+    {
+        let path = input(name, text).expect("the scratch directory takes a file");
+        let stdout = unwritable().expect("an unwritable stream opens");
+        let output = cthulhu_into(stdout, &[&path]).expect("the binary runs");
+        assert_eq!(output.status.code(), Some(5));
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            format!("error: {}\n", SinkError::Unwritable)
+        );
+    }
 }
 
 #[cfg(unix)]

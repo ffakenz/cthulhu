@@ -133,5 +133,6 @@ does not build.
 - No module but `main.rs` touches `std::env`, `std::fs`, stdout or stderr.
 - Output is deterministic: commands apply in arrival order, `Accounts` iterates by client id, and
   nothing reads the clock or hash order.
-- Verification follows *Correctness defined by laws and a model*: the laws in `docs/overview.md`,
-  a naive model, and fixtures through the binary in `app/tests/it`.
+- Verification follows *Correctness defined by equations between runs*: the laws in
+  `docs/overview.md`, checked by comparing runs of the engine with each other, and fixtures through
+  the binary in `app/tests/it`.

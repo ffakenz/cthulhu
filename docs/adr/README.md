@@ -34,3 +34,4 @@ Records here state architecture principles. How the engine treats its input is i
 - [16. Layers as packages that depend inward](0016-layers-as-packages-that-depend-inward.md)
 - [17. csv, serde, rust_decimal, thiserror, clap, proptest and rand as dependencies](0017-csv-serde-rust-decimal-thiserror-clap-proptest-and-rand-as-dependencies.md)
 - [18. Libraries and an app as packages that depend inward](0018-libraries-and-an-app-as-packages-that-depend-inward.md)
+- [19. Correctness defined by equations between runs](0019-correctness-defined-by-equations-between-runs.md)

@@ -50,4 +50,4 @@ Both functions read the current state; only `evolve` produces the next one.
 | Single writer per partition | each client's state has one writer | *State partitioned by client* |
 | Idempotent intake | `SeenIds`: the first sight of a tx id wins | *State partitioned by client*; *Tx ids consumed on first sight* (design) |
 | Parse, don't validate | `CsvRow` to `Command`; `Amount` has one constructor | *Three failure tiers*; *Rows parsed into commands at the boundary* (design) |
-| Property and model-based testing | laws over generated input, a naive model, runtimes proven equal | *Correctness defined by laws and a model*; *Runtimes proven against a sequential reference* |
+| Property-based and metamorphic testing | laws over generated input that compare runs with each other, runtimes proven equal | *Correctness defined by equations between runs*; *Runtimes proven against a sequential reference* |

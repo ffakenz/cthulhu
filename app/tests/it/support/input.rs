@@ -172,31 +172,30 @@ impl Id {
 
 /// How a dispute command's amount is written: empty, as a value, as text an amount refuses, or left
 /// out where `amount` is the last column.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Stray {
     Empty,
     Value,
-    Refused(&'static str),
+    Refused(String),
     Absent,
 }
 
-/// Every way to write a dispute command's amount.
-const STRAYS: [Stray; 7] = [
-    Stray::Empty,
-    Stray::Value,
-    Stray::Refused("-1"),
-    Stray::Refused("abc"),
-    Stray::Refused("0"),
-    Stray::Refused("1.23456"),
-    Stray::Absent,
-];
+/// Any way to write a dispute command's amount.
+fn any_stray() -> impl Strategy<Value = Stray> {
+    prop_oneof![
+        Just(Stray::Empty),
+        Just(Stray::Value),
+        any_refused_amount().prop_map(|(text, _)| Stray::Refused(text)),
+        Just(Stray::Absent),
+    ]
+}
 
 /// The line ends the input reads.
 const ENDS: [&str; 3] = ["\n", "\r\n", "\r"];
 
 /// How one line is written: a wrap for each field in order, its ids', its amount's zeros before
 /// and after, a dispute command's amount, its end, and whether a blank line comes before it.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct Spelling {
     wraps: [Wrap; 5],
     client: Id,
@@ -211,7 +210,7 @@ pub(crate) struct Spelling {
 pub(crate) fn any_spelling() -> impl Strategy<Value = Spelling> {
     let zeros = (0..=2_usize, 0..=2_usize);
     let ends = select(&ENDS);
-    (uniform5(any_wrap()), select(&IDS), select(&IDS), zeros, select(&STRAYS), ends, any::<bool>())
+    (uniform5(any_wrap()), select(&IDS), select(&IDS), zeros, any_stray(), ends, any::<bool>())
         .prop_map(|(wraps, client, tx, zeros, stray, end, blank)| Spelling {
             wraps,
             client,
@@ -275,7 +274,7 @@ pub(crate) fn any_incomplete_layout() -> impl Strategy<Value = Layout> {
 }
 
 /// `line`'s fields in the order of `columns`, as `spelling` writes them.
-fn fields(line: Line, spelling: Spelling, columns: &[&str]) -> String {
+fn fields(line: Line, spelling: &Spelling, columns: &[&str]) -> String {
     let amount_last = columns.last() == Some(&"amount");
     let (leading, trailing) = spelling.zeros;
     let texts: Vec<String> = columns
@@ -287,10 +286,10 @@ fn fields(line: Line, spelling: Spelling, columns: &[&str]) -> String {
                 "client" => spelling.client.spell(u64::from(line.client)),
                 "tx" => spelling.tx.spell(u64::from(line.tx)),
                 "amount" if moves_money(line.kind) => line.amount.spelled(leading, trailing),
-                "amount" => match spelling.stray {
+                "amount" => match &spelling.stray {
                     Stray::Absent if amount_last => return None,
                     Stray::Value => line.amount.spelled(leading, trailing),
-                    Stray::Refused(text) => text.to_owned(),
+                    Stray::Refused(text) => text.clone(),
                     Stray::Empty | Stray::Absent => String::new(),
                 },
                 _ => "x".to_owned(),
@@ -307,11 +306,11 @@ pub(crate) fn spelled(lines: &[(Line, Spelling)], layout: &Layout) -> String {
         layout.columns.iter().zip(layout.header).map(|(name, wrap)| wrap.around(name)).collect();
     let bom = if layout.bom { "\u{feff}" } else { "" };
     let header = String::from(bom) + &names.join(",") + layout.end;
-    let body = lines.iter().fold(String::new(), |text, &(line, spelling)| {
+    let body = lines.iter().fold(String::new(), |text, (line, spelling)| {
         let blank = if spelling.blank { spelling.end } else { "" };
-        text + blank + &fields(line, spelling, &layout.columns) + spelling.end
+        text + blank + &fields(*line, spelling, &layout.columns) + spelling.end
     });
-    let last_end = lines.last().map_or("", |&(_, spelling)| spelling.end);
+    let last_end = lines.last().map_or("", |(_, spelling)| spelling.end);
     match body.strip_suffix(last_end) {
         Some(unended) if !layout.last_end => header + unended,
         Some(_) | None => header + &body,

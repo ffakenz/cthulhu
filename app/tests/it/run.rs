@@ -131,8 +131,10 @@ fn prop_any_spelling_reads_as_the_canonical_one() {
         "any spelling of valid lines reads as their canonical spelling",
         (vec((any_line, input::any_spelling()), 0..=8), input::any_layout()),
         |(drawn, layout)| {
-            let spelled: Vec<(input::Line, input::Spelling)> =
-                drawn.iter().map(|&(line, spelling)| (layout.fit(line), spelling)).collect();
+            let spelled: Vec<(input::Line, input::Spelling)> = drawn
+                .iter()
+                .map(|(line, spelling)| (layout.fit(*line), spelling.clone()))
+                .collect();
             let lines: Vec<input::Line> = spelled.iter().map(|&(line, _)| line).collect();
             support::summary(input::spelled(&spelled, layout).as_bytes())
                 == support::summary(input::canonical(&lines).as_bytes())

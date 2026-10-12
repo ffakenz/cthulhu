@@ -1,15 +1,16 @@
 //! Laws of the CSV adapters: every spelling of the rows reads as the model reads them; a header
-//! lacking a column, or a failed read, ends the source with its error.
+//! lacking a column, or a failed read, ends the source with its error; the table printed is the
+//! naive model's, and one the output takes only in part is an error.
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
-use backend::csv_io::CsvSource;
+use backend::csv_io::{CsvSource, SinkError, render_csv};
 use backend::run::{Row, SourceError};
 use proptest::arbitrary::any;
 use proptest::sample::Index;
 
 use crate::support::spelling::{self, Input};
-use crate::support::{self, generate};
+use crate::support::{self, generate, model};
 
 /// A header whose first name holds a byte that is not UTF-8, then a row.
 const NOT_UTF8_HEADER: &[u8] = b"type\xff,client,tx\ndeposit,1,1\n";
@@ -89,6 +90,74 @@ fn prop_read_failure_ends_the_source() {
                 *last == Err(SourceError::Unreadable) && expected(input).starts_with(before)
             }
             None => false,
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+/// An output that takes at most `room` bytes: a write that does not fit is cut short, and every
+/// write once it is full fails.
+#[derive(Debug)]
+struct Full {
+    written: Vec<u8>,
+    room: usize,
+}
+
+impl Write for Full {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let space = self.room.saturating_sub(self.written.len());
+        if space == 0 && !bytes.is_empty() {
+            return Err(io::Error::other("the output is full"));
+        }
+        let taken = bytes.get(..space.min(bytes.len())).unwrap_or_default();
+        self.written.extend_from_slice(taken);
+        Ok(taken.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn prop_table_is_the_naive_models() {
+    let law = support::for_all(
+        "the table printed for any input is the naive model's, header first, accounts by client id",
+        spelling::input(),
+        |input| {
+            support::summarize(CsvSource::new(input.text().as_slice())).is_ok_and(|summary| {
+                let mut table = Vec::new();
+                render_csv(&summary.accounts, &mut table).is_ok()
+                    && table == model::table(input.rows()).into_bytes()
+            })
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+#[test]
+fn prop_table_that_cannot_be_written_whole_is_an_error() {
+    let law = support::for_all(
+        "a table, never empty, that the output takes only in part is an Unwritable error; one it takes whole succeeds",
+        (spelling::input(), any::<Index>()),
+        |(input, room)| {
+            let Ok(summary) = support::summarize(CsvSource::new(input.text().as_slice())) else {
+                return false;
+            };
+            let mut whole = Vec::new();
+            if render_csv(&summary.accounts, &mut whole).is_err() || whole.is_empty() {
+                return false;
+            }
+            let room = room.index(whole.len().saturating_add(1));
+            let mut out = Full { written: Vec::new(), room };
+            match render_csv(&summary.accounts, &mut out) {
+                Ok(()) => room == whole.len() && out.written == whole,
+                Err(error) => room < whole.len() && error == SinkError::Unwritable,
+            }
         },
     );
     if let Err(failure) = law {

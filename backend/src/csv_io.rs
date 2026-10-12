@@ -1,13 +1,15 @@
 //! The CSV adapters: `CsvSource` reads rows from CSV text into commands.
 
-use std::io::Read;
+use std::error;
+use std::fmt;
+use std::io::{Read, Write};
 use std::mem;
 
 use csv::{ErrorKind, ReaderBuilder, StringRecord, Trim};
 use serde::Deserialize;
 
 use crate::domain::{Address, Amount, ClientCommand, ClientId, Command, DisputeCommand, TxId};
-use crate::run::{Row, RowError, SourceError};
+use crate::run::{Accounts, Row, RowError, SourceError};
 
 /// The columns every header names.
 const REQUIRED: [&str; 3] = ["type", "client", "tx"];
@@ -160,4 +162,29 @@ fn spoiled(error: &csv::Error) -> Spoiled {
         ErrorKind::Io(_) | ErrorKind::Seek | ErrorKind::Serialize(_) => Spoiled::Input,
         _ => Spoiled::Unknown,
     }
+}
+
+/// Why the accounts table could not be written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SinkError {
+    /// Writing the output failed.
+    Unwritable,
+    /// The client's total, available plus held, overflows the decimal type.
+    Overflow(ClientId),
+}
+
+impl fmt::Display for SinkError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unwritable => f.write_str("the output cannot be written"),
+            Self::Overflow(client) => write!(f, "the total of client {client} overflows"),
+        }
+    }
+}
+
+impl error::Error for SinkError {}
+
+/// Writes nothing to `_out`.
+pub fn render_csv(_accounts: &Accounts, _out: &mut impl Write) -> Result<(), SinkError> {
+    Ok(())
 }

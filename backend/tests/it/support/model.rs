@@ -138,6 +138,20 @@ pub(crate) fn printed(rows: &[InputRow]) -> Printed {
     }
 }
 
+/// The accounts table the naive engine prints for `rows`: the header, then a line per account by
+/// client id.
+pub(crate) fn table(rows: &[InputRow]) -> String {
+    let lines: Vec<String> = Engine::after(rows)
+        .accounts
+        .iter()
+        .map(|(client, &Account { available, held, locked })| {
+            let total = available.plus(held);
+            format!("{client},{available},{held},{total},{locked}\n")
+        })
+        .collect();
+    format!("client,available,held,total,locked\n{}", lines.concat())
+}
+
 impl Engine {
     /// The naive engine after taking `rows`, in order.
     fn after(rows: &[InputRow]) -> Self {

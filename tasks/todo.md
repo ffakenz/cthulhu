@@ -313,9 +313,10 @@ Task 1 lands the source:
 - the module doc's first clause.
 
 Task 3 adds the rest:
-- red: `SinkError` with its impls, the stub `render_csv`, the imports `error`, `fmt`, `Write`
-  and `Accounts`, and the module doc's clause on `render_csv`;
-- green: `TABLE`, the `Writer` import, and the real `render_csv`.
+- red: `SinkError` with its impls, the stub `render_csv`, and the imports `error`, `fmt`,
+  `Write` and `Accounts`;
+- green: `TABLE`, the `Writer` import, the real `render_csv`, and the module doc's clause on
+  `render_csv`.
 
 ```rust
 //! The CSV adapters: `CsvSource` reads rows from CSV text into commands, and `render_csv` writes
@@ -537,7 +538,7 @@ and its write-failure law is broken by deleting that flush.
 With `use std::fmt;` at the top:
 
 ```rust
-/// The client's number, as the accounts table prints it.
+/// The client's number, in decimal digits.
 impl fmt::Display for ClientId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
@@ -1316,15 +1317,15 @@ impl Engine {
 /// The accounts table the naive engine prints for `rows`: the header, then a line per account by
 /// client id.
 pub(crate) fn table(rows: &[InputRow]) -> String {
-    let mut table = String::from("client,available,held,total,locked\n");
-    for (client, account) in &Engine::after(rows).accounts {
-        let total = account.available.plus(account.held);
-        table.push_str(&format!(
-            "{client},{},{},{total},{}\n",
-            account.available, account.held, account.locked
-        ));
-    }
-    table
+    let lines: Vec<String> = Engine::after(rows)
+        .accounts
+        .iter()
+        .map(|(client, &Account { available, held, locked })| {
+            let total = available.plus(held);
+            format!("{client},{available},{held},{total},{locked}\n")
+        })
+        .collect();
+    format!("client,available,held,total,locked\n{}", lines.concat())
 }
 ```
 
@@ -1344,9 +1345,6 @@ use proptest::sample::Index;
 
 use crate::support::spelling::{self, Input};
 use crate::support::{self, generate, model};
-
-/// The table's header line.
-const HEADER: &[u8] = b"client,available,held,total,locked\n";
 
 /// A header whose first name holds a byte that is not UTF-8, then a row.
 const NOT_UTF8_HEADER: &[u8] = b"type\xff,client,tx\ndeposit,1,1\n";
@@ -1386,7 +1384,8 @@ impl Read for Breaking<'_> {
     }
 }
 
-/// An output with room for `room` bytes, that fails every write past them.
+/// An output that takes at most `room` bytes: a write that does not fit is cut short, and every
+/// write once it is full fails.
 #[derive(Debug)]
 struct Full {
     written: Vec<u8>,
@@ -1477,14 +1476,14 @@ fn prop_table_is_the_naive_models() {
 #[test]
 fn prop_table_that_cannot_be_written_whole_is_an_error() {
     let law = support::for_all(
-        "a table the output takes only in part is an Unwritable error; one it takes whole succeeds",
+        "a table, never empty, that the output takes only in part is an Unwritable error; one it takes whole succeeds",
         (spelling::input(), any::<Index>()),
         |(input, room)| {
             let Ok(summary) = support::summarize(CsvSource::new(input.text().as_slice())) else {
                 return false;
             };
             let mut whole = Vec::new();
-            if render_csv(&summary.accounts, &mut whole).is_err() || !whole.starts_with(HEADER) {
+            if render_csv(&summary.accounts, &mut whole).is_err() || whole.is_empty() {
                 return false;
             }
             let room = room.index(whole.len().saturating_add(1));
@@ -1949,7 +1948,7 @@ Green:
 
 Red:
 
-- [ ] `model.rs`: `table`. `csv_io.rs` (tests): `HEADER`, `Full` and the two sink laws, with
+- [x] `model.rs`: `table`. `csv_io.rs` (tests): `Full` and the two sink laws, with
       their imports and the module doc's clause on the sink. `id.rs`: `Display for ClientId`,
       which `SinkError`'s message needs. `csv_io.rs` (src): `SinkError` with its `Display` and
       `error::Error`, and the stub:
@@ -1961,9 +1960,23 @@ Red:
   }
   ```
 
-- [ ] `cargo test --workspace --locked` fails on exactly the two sink laws: the empty table is
-      not the model's, nor does it start with the header. 30 pass.
-- [ ] Per-commit gate (red); commit `test(csv_io): …`.
+- [x] `cargo test --workspace --locked` fails on exactly the two sink laws: the empty table is
+      not the model's, nor is it non-empty. 30 pass. Run with persistence off:
+      "30 passed; 2 failed", both laws shrinking to an input with no rows.
+  - `model::table` collects its lines and concatenates them, since clippy refuses `format!`
+    pushed onto a `String`.
+  - The module doc's clause on `render_csv` waits for the green, where it becomes true.
+- [x] Per-commit gate (red); commit `test(csv_io): …`. The deps, fmt-check, lint and build
+      checks are green; the tests fail as above; the name greps and the record scan are silent.
+      The code-reviewer found no blocker and no should-fix, and six nits are taken:
+  - the write-failure law guards on an empty table, not on the header, so a format break fails
+    only the table law;
+  - `ClientId`'s doc names no table;
+  - `Full`'s doc matches its cut-short writes;
+  - the oracle destructures the model's account;
+  - the plan's red and green lists agree.
+
+  Re-run: "30 passed; 2 failed", the same two laws.
 
 Green:
 

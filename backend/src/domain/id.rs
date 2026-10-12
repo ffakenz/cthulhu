@@ -1,5 +1,7 @@
 //! Identities: a client, a transaction, and a command's address, which holds one of each.
 
+use std::fmt;
+
 /// A client, named by a `u16`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ClientId(u16);
@@ -7,6 +9,13 @@ pub struct ClientId(u16);
 impl From<u16> for ClientId {
     fn from(id: u16) -> Self {
         Self(id)
+    }
+}
+
+/// The client's number, in decimal digits.
+impl fmt::Display for ClientId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 

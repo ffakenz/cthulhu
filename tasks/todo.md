@@ -128,7 +128,7 @@ suite.
 - [x] **2.** The new suite replaces the old, with `make ci` green. These are characterisation
       tests: the behaviour already works. Commit
       `test(it): check the engine by equations between its own runs`.
-- [ ] **3.** Law evidence, run in a scratch copy, never in the repo. Every recorded break of the
+- [x] **3.** Law evidence, run in a scratch copy, never in the repo. Every recorded break of the
       stage 1 and command-line plans is run against the new suite. Each must fail a test, or fail
       `make lint` for the `.expect` break. If a break escapes, the strategy is fixed or a pair is
       added; a law is never weakened.
@@ -137,8 +137,8 @@ suite.
       - `README.md` and `CLAUDE.md`;
       - the two skill references to the test crate.
       Commit `docs(engine): describe the model-free tests`.
-- [ ] **5.** One `code-reviewer` run on the branch. Its fixes go in new commits.
-- [ ] **6.** The Review, the Law evidence and any lesson. Commit
+- [x] **5.** One `code-reviewer` run on the branch. Its fixes go in new commits.
+- [x] **6.** The Review, the Law evidence and any lesson. Commit
       `docs(tasks): close the model-free tests plan`.
 - [ ] **7.** Prompt history 0008, alone:
       `docs(prompts): add prompt history 0008 (model-free tests)`.
@@ -146,4 +146,119 @@ suite.
 
 ## Review
 
-*Written at the close.*
+**What the work became.** The test crate went from 3,481 lines to 1,269, and no test computes what
+a run should give:
+- `run.rs` holds the engine to equations between its runs;
+- `domain.rs` holds the laws of money;
+- `support/input.rs` holds a generator per field, composed into valid and malformed lines;
+- `cli.rs` keeps the binary's fixtures. Its write-failure test now runs everywhere, and a non-UTF-8
+  header joins the incomplete-header loop.
+
+**What the framing got wrong.**
+- The first suite traded the spelling domain for one example, the one the recorded breaks
+  happened to need, and two of its properties checked success and failure together. The person
+  asked for one generator per field, composed into a line, and for failure to have generators and
+  properties of its own. The deviation above records the change.
+- Coverage was measured against the recorded breaks alone. The branch review found five
+  behaviours the old generators pinned and no recorded break exercised:
+  - a dispute's refused amount;
+  - a header without `amount`;
+  - a header lacking `type` or `client`;
+  - zero reached from below;
+  - the order of the amount refusals.
+
+  Each now has generated coverage, shown failing on the reviewer's break, and the lesson of this
+  date turns them into rules.
+- `main` moved twice while the plan waited for approval: the workspace split landed, and so did the
+  conventions for lean plans and one review per branch. The plan was revised for both before any
+  work began.
+
+**What was narrower or wider than expected.**
+- Wider: the stores' laws are now held through the engine's laws, as *Libraries and an app as
+  packages that depend inward* already says of `engine` and `store`. A malformed line among valid
+  ones also catches seven of the recorded breaks.
+- Narrower: no production code changed, and the `.expect` break is caught by `make lint`, not by a
+  test.
+
+**Deliberately not done.**
+- `evolve`'s `Opened` arm stays unchecked: `run` never produces `Opened`.
+- Overflow stays unchecked, as before.
+- A header that names a column twice is left to no test, as before.
+- The review's nits are left to the person.
+
+**Law evidence.** Every recorded break from the Law evidence tables of
+`tasks/stage-1-proptest-plan.md` and `tasks/stage-1-cli-plan.md`, and the review's five, was run in
+a scratch copy, never the repo. The pass ran against the suite at `5f6d1e7`. The two test commits
+after it, a named direction and refused amounts drawn from their generator, were run again on the
+two breaks they touch.
+- **Results:** of the 45 breaks, 43 fail a test on the first run, one fails `make lint`, and one
+  is unreachable.
+- **Single-law catches:** each break that a single randomized law catches failed 20 of 20 runs of
+  that law alone, with fresh seeds.
+- **The review's five:** all five pass the suite as it stood before the review.
+- **Restores:** each restored file was given a fresh mtime, since cargo reuses a build when a
+  restored file is older than it.
+
+The table's test codes:
+- `EQ`: `prop_equivalent_commands_leave_the_same_accounts`, with its pair number;
+- `IND`: `prop_clients_run_independently`;
+- `SPELL`: `prop_any_spelling_reads_as_the_canonical_one`;
+- `MAL`: `prop_a_malformed_line_changes_nothing_but_its_count`;
+- `INC`: `prop_a_header_lacking_type_client_or_tx_stops_the_run`;
+- `SRC`: the source-error example;
+- `AMT`, `REF`, `ZERO`: the money laws;
+- the `cli` fixtures:
+  - `OVW`: the overview example;
+  - `SMP`: the sample input;
+  - `RM`: every rejection and malformed kind;
+  - `HDR`: the incomplete headers;
+  - `UNRD`: the unreadable input;
+  - `TBLW` and `RPTW`: the table and report write failures.
+
+| Break | Caught by |
+|---|---|
+| the size check refuses fifteen whole digits | AMT, EQ |
+| `from_str` strips a leading `+` | REF, MAL |
+| `from_str` reads its first byte by index | REF |
+| `checked_sub` negates its difference | ZERO, OVW, SMP, RM, RPTW |
+| `checked_sub` negates a zero reached across two scales | ZERO |
+| a static flag refuses every other client command | EQ, IND, SPELL, MAL, OVW, SMP, RM, RPTW |
+| `Released` reads the deposit with `.expect` | `make lint` |
+| `Released` leaves `held` | EQ 1, SMP, RM, RPTW |
+| `ChargedBack` leaves `held` | EQ 4, OVW, SMP, RM, RPTW |
+| `ChargedBack` keeps the lock | EQ 5, OVW, SMP, RM, RPTW |
+| the funds check compares with `total` | EQ 14 |
+| a resolve of a settled deposit releases it | EQ 2, SMP |
+| the funds check refuses exactly `available` | EQ 13, OVW |
+| the lock is checked for deposits only | EQ 6 |
+| `open` locks the account | OVW, SMP, RM, RPTW |
+| `Opened` makes `open()` of a loaded footprint | none: `run` never produces `Opened` |
+| withdrawals skip intake | EQ 10 |
+| a refusal at a loaded footprint commits `open()` | EQ 2, OVW, SMP, RM, RPTW |
+| malformed rows are skipped uncounted | MAL, RM |
+| `run` skips an `Err` like a malformed row | SRC, UNRD, HDR, INC |
+| the source is collected whole before the run | SRC |
+| rejections kept as one entry per refused row | IND, SMP, RM |
+| a static run counter in the first rejection count | IND, SPELL, MAL |
+| a footprint cache keyed by the tx id alone, across runs | EQ 11, IND, SPELL, MAL |
+| the same cache, reset at each run | EQ 11, IND |
+| `commit` keeps a charged-back deposit | EQ 7 |
+| `commit` skips the account when it writes a deposit | EQ 1, OVW, SMP, RM, RPTW |
+| `snapshot` leaves out the accounts at zero | OVW, RM, RPTW |
+| `sight` forgets an id it answers `Repeat` for | EQ 10 |
+| fields are not trimmed | SPELL, OVW, SMP, RM, RPTW |
+| a row must have the header's length | SPELL, MAL, EQ, RM |
+| the extra-field check is removed | MAL, RM, RPTW |
+| ids are parsed by `str::parse`, which refuses `0x…` | SPELL |
+| the header check leaves out `tx` | HDR, INC |
+| the source reads an I/O error as a malformed row | SRC |
+| a non-UTF-8 header reads as unreadable | HDR |
+| the total column prints `held` | OVW, SMP, RM, RPTW |
+| `render_csv` returns without flushing | TBLW |
+| a failed table write reads as an overflow | TBLW |
+| a failed report exits with status 4 | RPTW |
+| a dispute's amount is parsed (review) | SPELL |
+| the header must name `amount` (review) | SPELL |
+| the header check leaves out `type` (review) | INC |
+| `checked_add` negates a zero reached from below (review) | ZERO |
+| the 10^15 check runs before the four-decimal one (review) | REF, MAL |

@@ -2,7 +2,6 @@
 //! says why, and moves then their sum back print zero, from above or below, at any scales.
 
 use engine::domain::{Amount, AmountError, Balance};
-use proptest::arbitrary::any;
 use proptest::collection::vec;
 use proptest::prop_oneof;
 use proptest::sample::select;
@@ -49,20 +48,38 @@ fn balance(units: u64) -> Option<Balance> {
     format!("{}.{:04}", units / 10_000, units % 10_000).parse::<Amount>().ok().map(Balance::from)
 }
 
-/// `before` with `units` credited, or debited when `credit` is false; `None` when it overflows or
-/// the amount does not parse.
-fn moved(before: Balance, units: u64, credit: bool) -> Option<Balance> {
-    let amount = balance(units)?;
-    if credit { before.checked_add(amount) } else { before.checked_sub(amount) }
+/// Which way money moves: a credit adds to a balance, a debit takes from it.
+#[derive(Debug, Clone, Copy)]
+enum Move {
+    Credit,
+    Debit,
 }
 
-/// The balance after moving each of `units` one way, credits when `credits_first`, then their sum
-/// the other way; `None` when the sum overflows or an amount does not parse.
-fn there_and_back(units: &[u64], credits_first: bool) -> Option<Balance> {
+impl Move {
+    /// The move the other way.
+    fn back(self) -> Self {
+        match self {
+            Self::Credit => Self::Debit,
+            Self::Debit => Self::Credit,
+        }
+    }
+}
+
+/// `before` with `units` moved `way`; `None` when it overflows or the amount does not parse.
+fn moved(before: Balance, units: u64, way: Move) -> Option<Balance> {
+    let amount = balance(units)?;
+    match way {
+        Move::Credit => before.checked_add(amount),
+        Move::Debit => before.checked_sub(amount),
+    }
+}
+
+/// The balance after moving each of `units` `way`, then their sum back; `None` when the sum
+/// overflows or an amount does not parse.
+fn there_and_back(units: &[u64], way: Move) -> Option<Balance> {
     let total = units.iter().try_fold(0_u64, |sum, &unit| sum.checked_add(unit))?;
-    let away =
-        units.iter().try_fold(Balance::ZERO, |sum, &unit| moved(sum, unit, credits_first))?;
-    moved(away, total, !credits_first)
+    let away = units.iter().try_fold(Balance::ZERO, |sum, &unit| moved(sum, unit, way))?;
+    moved(away, total, way.back())
 }
 
 #[test]
@@ -72,10 +89,8 @@ fn prop_moves_then_their_sum_back_print_zero() {
     let law = support::for_all(
         "moves one way, then their sum the other way, leave a balance that prints 0.0000, from \
          above or below, at any scales",
-        (vec(any_units, 2..=4), any::<bool>()),
-        |(units, credits_first)| {
-            there_and_back(units, *credits_first).is_some_and(|zero| zero.to_string() == "0.0000")
-        },
+        (vec(any_units, 2..=4), select(&[Move::Credit, Move::Debit])),
+        |(units, way)| there_and_back(units, *way).is_some_and(|zero| zero.to_string() == "0.0000"),
     );
     if let Err(failure) = law {
         panic!("{failure}");

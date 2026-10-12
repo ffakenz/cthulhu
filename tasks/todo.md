@@ -222,9 +222,20 @@ The person signed off this plan as written.
     before `INPUT`. Its nits are taken too: `main`'s doc comment, the manifest's clap line within
     100 columns, and reasons that name the help and the version among the exits.
   - Commit `feat(cli): parse the arguments with clap`.
-- [ ] **4, fix.** The two tests that need a stream no write can reach take a socket shut for
+- [x] **4, fix.** The two tests that need a stream no write can reach take a socket shut for
       writing, not a pipe whose reading end was dropped: another process can hold a copy of that
       reading end, and a write then succeeds. A pre-existing race, found while running the green.
+  - The race, reproduced in a throwaway project outside the repository, with the reading end held
+    by another process: the binary's report to the pipe went through and it exited 0. To a socket
+    shut for writing, its other end held the same way, the report failed and it exited 5.
+  - Before: `a_report_that_cannot_be_written_is_a_write_failure` exited 0 in one run of `it` out
+    of sixty. After: sixty runs, none failed. The reviewer ran the `cli` tests 2000 times with
+    each helper: the pipe failed 34 times, every one this test exiting 0, and the socket never.
+  - The code-reviewer found no blocker and no should-fix. Its nits are taken: the locals are
+    `stdout` and `stderr`, the input file `unwritable-stderr.csv`, the comment says the race is
+    macOS's, and this evidence names its runs.
+  - `make ci` green: 45 passed and 1 ignored. The helper and the two tests that use it are
+    Unix-only, like the renamed-binary test.
   - Commit `test(cli): make the unwritable streams fail whoever holds them`.
 - [ ] **5.** `rand` 0.10 in `backend`'s dev-dependencies; the Makefile, `CLAUDE.md` and
       `README.md` say "the dev targets" where they said "tests"; this plan's Review.

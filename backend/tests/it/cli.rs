@@ -5,6 +5,12 @@
 use std::fs;
 use std::io;
 #[cfg(unix)]
+use std::net::Shutdown;
+#[cfg(unix)]
+use std::os::fd::OwnedFd;
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -177,15 +183,20 @@ fn cthulhu_into(stdout: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Out
 }
 
 /// Runs the binary with `arguments`, its stderr written to `stderr`.
+#[cfg(unix)]
 fn cthulhu_reporting_into(stderr: impl Into<Stdio>, arguments: &[&Path]) -> io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stderr(stderr).output()
 }
 
-/// The writing end of a pipe whose reading end is already closed: every write to it fails.
-fn closed_pipe() -> io::Result<io::PipeWriter> {
-    let (reader, writer) = io::pipe()?;
-    drop(reader);
-    Ok(writer)
+/// One end of a socket pair, shut for writing: every write to it fails, whatever process holds
+/// the other end. On macOS, a pipe whose reading end was dropped let a write through about once in
+/// sixty runs: a child another test spawned could inherit that reading end before it was marked
+/// close-on-exec.
+#[cfg(unix)]
+fn unwritable() -> io::Result<OwnedFd> {
+    let (writer, _reader) = UnixStream::pair()?;
+    writer.shutdown(Shutdown::Write)?;
+    Ok(OwnedFd::from(writer))
 }
 
 /// These tests' scratch directory, created if missing.
@@ -303,10 +314,11 @@ fn the_binary_under_another_name_still_names_cthulhu() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), NO_ARGUMENT);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_help_that_cannot_be_written_is_a_write_failure() {
-    let closed = closed_pipe().expect("a pipe opens");
-    let output = cthulhu_into(closed, &[Path::new("--help")]).expect("the binary runs");
+    let stdout = unwritable().expect("an unwritable stream opens");
+    let output = cthulhu_into(stdout, &[Path::new("--help")]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(5));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.starts_with("error: cannot write the help or the version: "), "{stderr}");
@@ -361,12 +373,13 @@ fn a_full_output_is_a_write_failure() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_report_that_cannot_be_written_is_a_write_failure() {
-    let path = input("closed-stderr.csv", REJECTED_AND_MALFORMED)
+    let path = input("unwritable-stderr.csv", REJECTED_AND_MALFORMED)
         .expect("the scratch directory takes a file");
-    let closed = closed_pipe().expect("a pipe opens");
-    let output = cthulhu_reporting_into(closed, &[&path]).expect("the binary runs");
+    let stderr = unwritable().expect("an unwritable stream opens");
+    let output = cthulhu_reporting_into(stderr, &[&path]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(5));
     assert_eq!(String::from_utf8_lossy(&output.stdout), REJECTED_AND_MALFORMED_TABLE);
 }

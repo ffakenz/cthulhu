@@ -170,17 +170,26 @@ impl Id {
     }
 }
 
-/// How a dispute command's amount is written: empty, as a value, or left out where `amount` is the
-/// last column.
+/// How a dispute command's amount is written: empty, as a value, as text an amount refuses, or left
+/// out where `amount` is the last column.
 #[derive(Debug, Clone, Copy)]
 enum Stray {
     Empty,
     Value,
+    Refused(&'static str),
     Absent,
 }
 
 /// Every way to write a dispute command's amount.
-const STRAYS: [Stray; 3] = [Stray::Empty, Stray::Value, Stray::Absent];
+const STRAYS: [Stray; 7] = [
+    Stray::Empty,
+    Stray::Value,
+    Stray::Refused("-1"),
+    Stray::Refused("abc"),
+    Stray::Refused("0"),
+    Stray::Refused("1.23456"),
+    Stray::Absent,
+];
 
 /// The line ends the input reads.
 const ENDS: [&str; 3] = ["\n", "\r\n", "\r"];
@@ -256,6 +265,7 @@ fn fields(line: Line, spelling: Spelling, columns: &[&str]) -> String {
                 "amount" => match spelling.stray {
                     Stray::Absent if amount_last => return None,
                     Stray::Value => line.amount.spelled(leading, trailing),
+                    Stray::Refused(text) => text.to_owned(),
                     Stray::Empty | Stray::Absent => String::new(),
                 },
                 _ => "x".to_owned(),

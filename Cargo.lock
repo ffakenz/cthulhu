@@ -28,6 +28,7 @@ dependencies = [
  "csv",
  "engine",
  "proptest",
+ "rand 0.10.3",
  "serde",
  "store",
  "thiserror",

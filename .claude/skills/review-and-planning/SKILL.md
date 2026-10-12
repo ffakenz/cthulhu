@@ -98,12 +98,12 @@ infrastructure into the tree names the crate it stands in for.
 feature and target) holds a package that is neither a workspace member nor an admitted crate,
 and `.claude/settings.json` asks before `cargo add` or `cargo install` runs. It reads the graph,
 not `Cargo.lock`, which also lists optional crates that are never built. An approved crate is
-admitted by adding it to `ADMITTED`, or to `ADMITTED_DEV` when only the tests build it, together
-with its decision record, never by weakening the check.
+admitted by adding it to `ADMITTED`, or to `ADMITTED_DEV` when only the dev targets build it,
+together with its decision record, never by weakening the check.
 
 Two more rules keep holding without a reviewer:
 
-- **A test-only dependency must be unreachable from production.** `make deps` checks it from the
+- **A dev-only dependency must be unreachable from production.** `make deps` checks it from the
   graph the build reports, never from reading manifests: `cargo tree --edges no-dev` may list only
   workspace members and `ADMITTED` crates.
 - **Check the source and the build graph, not a compiled binary.** Compilation inlines, mangles and

@@ -27,11 +27,12 @@ ADMITTED := anstyle arrayvec autocfg clap clap_builder clap_derive clap_lex csv 
     memchr num-traits proc-macro2 quote rust_decimal ryu serde serde_core serde_derive syn \
     thiserror thiserror-impl unicode-ident
 
-# The crates the decision records admit for tests only: never in the program's build graph.
+# The crates the decision records admit for the dev targets only, tests and examples: never in the
+# program's build graph.
 ADMITTED_DEV := bitflags cfg-if chacha20 core_detect cpufeatures getrandom libc proptest r-efi \
     rand rand_core rand_xorshift regex-syntax unarray
 
-deps: ## Fail when the build graph holds a crate no decision record admits, or the program a test-only one
+deps: ## Fail when the build graph holds a crate no decision record admits, or the program a dev-only one
 	@tree() { $(CARGO) tree --workspace --locked --edges "$$1" --target all --all-features --prefix none --format '{p}'; }; \
 	outside() { printf '%s\n' "$$1" | awk 'NF {print $$1}' | sort -u | while read -r crate; do \
 		case "$$2" in (*" $$crate "*) ;; (*) echo "$$crate" ;; esac; \
@@ -42,8 +43,8 @@ deps: ## Fail when the build graph holds a crate no decision record admits, or t
 	members=" $$(printf '%s\n' "$$members" | awk 'NF {printf "%s ", $$1}')"; \
 	unadmitted=$$(outside "$$graph" "$${members}$(ADMITTED) $(ADMITTED_DEV) "); \
 	if [ -n "$$unadmitted" ]; then printf 'The build graph holds crates no decision record admits:\n%s\n' "$$unadmitted"; exit 1; fi; \
-	test_only=$$(outside "$$program" "$${members}$(ADMITTED) "); \
-	if [ -n "$$test_only" ]; then printf 'The program build graph holds crates admitted for tests only:\n%s\n' "$$test_only"; exit 1; fi
+	dev_only=$$(outside "$$program" "$${members}$(ADMITTED) "); \
+	if [ -n "$$dev_only" ]; then printf 'The program build graph holds crates admitted for the dev targets only:\n%s\n' "$$dev_only"; exit 1; fi
 
 ci: deps fmt-check lint build test ## The commit gate
 

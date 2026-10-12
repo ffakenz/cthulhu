@@ -237,8 +237,17 @@ The person signed off this plan as written.
   - `make ci` green: 45 passed and 1 ignored. The helper and the two tests that use it are
     Unix-only, like the renamed-binary test.
   - Commit `test(cli): make the unwritable streams fail whoever holds them`.
-- [ ] **5.** `rand` 0.10 in `backend`'s dev-dependencies; the Makefile, `CLAUDE.md` and
+- [x] **5.** `rand` 0.10 in `backend`'s dev-dependencies; the Makefile, `CLAUDE.md` and
       `README.md` say "the dev targets" where they said "tests"; this plan's Review.
+  - Run: `cargo update --workspace` added one line to the lock, `rand 0.10.3` in `backend`'s list.
+    `cargo tree --workspace --locked --edges normal,build,dev --target all --all-features` lists
+    the same 41 packages before and after, and `make deps` passes.
+  - `make ci` green: 45 passed and 1 ignored.
+  - The code-reviewer found no blocker. Its three should-fixes are taken: the Review's "wider"
+    names only what the plan had not, the race is the closed-pipe helper's, which the new help
+    test inherited, and the `review-and-planning` skill says "the dev targets" too. Its nits are
+    taken too: the Review's wording on the packages, `Command`'s calls and the lock, the accepted
+    record left as it was, the tests made Unix-only, this evidence, and `dev_only` in the Makefile.
   - Commit `chore(backend): add rand as a dev-dependency`.
 - [ ] **6.** Prompt history 0007, alone:
       `docs(prompts): add prompt history 0007 (workspace packages and admitted crates)`.
@@ -254,3 +263,39 @@ The person signed off this plan as written.
    ':!docs/adr' ':!docs/design' ':!.claude/skills/architecture-decisions'` lists nothing.
 5. `git commit -F` from a scratch file, staging explicit paths. Paths written here show the
    checkout as `<repo>`.
+
+## Review
+
+- **The evaluation's premise needed a correction:** the other repository's `libs/` holds four
+  crates, and its app is a fifth crate outside `libs/`; it has no `libs/app`. The split here keeps
+  three packages: `engine` and `store`, named after that repository's and checked against the
+  records' terms, and `backend`, the app, under its own name.
+- **What changed after the sign-off:**
+  - Task 4, red, gained an unknown flag and a renamed binary, both decided by the signed design
+    record.
+  - The renamed binary went from a copy, which can fail with `ETXTBSY` on Linux, to a hard link,
+    which got concurrent runs killed with SIGKILL on macOS, to `argv[0]`, which touches no file.
+  - `clippy.toml`'s clap entries grew from six to twelve, adding `Command`'s six calls, which the
+    derive reaches through `CommandFactory`.
+  - `make run` passes `--` before `INPUT`, so a path that begins with `-` still runs through it.
+- **Wider than planned:** a pre-existing race in the closed-pipe helper, which the report's
+  write-failure test used and the new help test inherited, fixed in its own commit; the Banned
+  table and the `rust-effects` and `review-and-planning` skills, which restate the gate's lists;
+  and, within files the plan named, the `rust-errors` rule's ban on an `#[error]` on the enum and
+  the reviewer agent's check narrowed to formats' crates.
+- **Narrower:** the report's write-failure test now runs only on Unix, as the new help and
+  renamed-binary tests do, so 46 is the count on Unix; CI runs on Linux and loses nothing.
+- **Deliberately not done:**
+  - The accepted record *A domain model in the records' language* still names the old paths of
+    `domain` and `core`, by the person's decision; *Layers as packages that depend inward* names
+    where they live.
+  - The config module: it lands with its first setting.
+  - `tokio`, and `tracing` with `tracing-subscriber`: deferred to the service stage, each with its
+    own record.
+  - `make deps` recognises workspace members by name only, so a registry crate named `engine` or
+    `store` would pass as one; matching members by name and path would close that.
+  - `text_io` repeats the wording of `RowError` and `AmountError`, and `render_csv` drops csv's
+    cause.
+  - `rand` has no direct use until the benchmark generator lands.
+- **What it cost:** three records, two packages, eight program crates (24 in all), six tests (40
+  became 46), and a lock that gained only the two packages and the eight crates.

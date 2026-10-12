@@ -21,6 +21,7 @@ thiserror = "2.0.21"
 
 [dev-dependencies]
 proptest = { version = "1.12", default-features = false, features = ["std"] }
+rand = { version = "0.10", default-features = false }
 
 [lints]
 workspace = true

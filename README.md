@@ -22,7 +22,8 @@ rustup toolchain install
 ```
 
 Admitted crates: `csv`, `serde`, `rust_decimal`, `thiserror` and `clap`, with the 19 crates they
-build on; for tests only, `proptest`, with the 13 more it builds on. All of them are in use.
+build on; for the dev targets only, `proptest` and `rand`, with the 12 more they build on. All of
+them are in use, `rand` so far only through `proptest`.
 
 ## Usage
 

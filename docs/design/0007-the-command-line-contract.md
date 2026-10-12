@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by 8
 
 ## Motivation
 

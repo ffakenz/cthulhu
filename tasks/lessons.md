@@ -106,7 +106,10 @@ pasted `$(INPUT)` unquoted into the shell. An allowed `make run INPUT='x; <comma
 the command, and so did a `CARGO=`, `SHELL=` or `-f` override. The plan's review flagged the
 unquoted variable only for paths with spaces. The command line's commit review raised the
 injection, and I carried it to the close as a note for the person; the final whole-branch review
-graded it important, and the person chose to narrow the allowance back and quote the input.
+graded it important, and the person chose to narrow the allowance back and quote the input. The
+fix's review found the same flaw in six `cargo …:*` allowances from the workspace's first commit,
+and a probe found it in `cargo metadata:*`; the person chose to narrow them to the forms the
+Makefile runs.
 
 **What I got wrong.**
 

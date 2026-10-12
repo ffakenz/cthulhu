@@ -2163,6 +2163,14 @@ Green:
     `cargo test:*` take a runner through `--config`, which runs any command, and `cargo build:*`,
     `check:*`, `clippy:*` and `tree:*` run a wrapper named by path. Asked before the next commit,
     the person chose to narrow them on this branch, in a commit of their own.
+  - A probe then found `cargo metadata --config 'build.rustc=…'` running the program too, and the
+    person chose to drop `cargo metadata:*` as well. The narrowing: `cargo run:*`, `cargo check:*`
+    and `cargo metadata:*` are gone; `clippy`, `build`, `test` and `tree` are allowed only in the
+    forms the Makefile runs; `cargo fmt:*` stays, since `cargo fmt` refuses `--config`.
+  - Before: `cargo run` and `cargo test` with a `--config` runner ran the given command. After, by
+    the allow list's own rule forms, none of eight such calls is allowed, while the Makefile's
+    cargo forms, `make ci` and `make run` still are. No test pins an allow list; these runs are
+    the evidence.
   - The fix is folded into the command line's green commit, which introduced the recipe and the
     allowance; `tasks/lessons.md` records the rule it teaches.
   - The minors are left to the person (Review).
@@ -2262,6 +2270,13 @@ feat(cli): turn an input file into the accounts table
 ```
 
 ```text
+fix(settings): narrow the cargo allowances to the forms the Makefile runs
+
+> An allowed cargo call can no longer run another program through --config without a prompt;
+> cargo beyond fmt asks first unless it is a form the Makefile runs.
+```
+
+```text
 docs(prompts): add prompt history 0005 (stage 1 command line)
 
 > The path from the request to plan the command line, through its sign-off, to the working
@@ -2349,15 +2364,16 @@ docs(prompts): add prompt history 0005 (stage 1 command line)
   - a second sink, `text_io::render_report`, which keeps the report's wording out of the domain
     and out of `main.rs` (Questions on gaps 6);
   - `Flaw` and `TooManyFields { first, rest }` in the generated rows;
-  - paths with spaces through `make run`.
+  - paths with spaces through `make run`;
+  - the cargo allowances on `main` narrowed to the forms the Makefile runs, as the person chose.
 
   **Narrower:**
   - unknown header columns follow serde's default, with no projection (Questions on gaps 1);
   - `make run` passes `INPUT` with no shell expansion, so a `~` that zsh leaves after `=` stays.
 - **Commits:** red and green apart, as `CLAUDE.md` § Implementation asks. That gives the plan's
   own commit first, three red/green pairs with the runtime laws' move onto CSV text between the
-  first two, and the prompt history last, as Commits lists them. The final review's fix is folded
-  into the command line's green commit.
+  first two, the narrowed cargo allowances, and the prompt history last, as Commits lists them.
+  The final review's fix is folded into the command line's green commit.
   - The plan-text sync of the sink red's review first rode in the sink's green commit, after a
     script failed inside a `;`-joined chain; at the close, the person chose to fold it back into
     the red.

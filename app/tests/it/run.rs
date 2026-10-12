@@ -1,7 +1,7 @@
 //! The runtime through the CSV source, over fresh in-memory stores. On valid lines, clients run
 //! independently, suffixes the rules make equivalent leave the same accounts after any lines, and
 //! any spelling reads as the canonical one. A malformed line changes nothing but its count, and a
-//! source error stops the run.
+//! header lacking a column or a source error stops the run.
 
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -136,6 +136,22 @@ fn prop_any_spelling_reads_as_the_canonical_one() {
             let lines: Vec<input::Line> = spelled.iter().map(|&(line, _)| line).collect();
             support::summary(input::spelled(&spelled, layout).as_bytes())
                 == support::summary(input::canonical(&lines).as_bytes())
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+#[test]
+fn prop_a_header_lacking_type_client_or_tx_stops_the_run() {
+    let any_line = input::any_line(input::any_client(), input::any_tx());
+    let law = support::for_all(
+        "a header lacking type, client or tx stops the run, whatever lines follow it",
+        (vec((any_line, input::any_spelling()), 0..=4), input::any_incomplete_layout()),
+        |(spelled, layout)| {
+            support::summary(input::spelled(spelled, layout).as_bytes())
+                == Err(RunError::Source(SourceError::IncompleteHeader))
         },
     );
     if let Err(failure) = law {

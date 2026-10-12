@@ -266,6 +266,14 @@ pub(crate) fn any_layout() -> impl Strategy<Value = Layout> {
     )
 }
 
+/// Any layout whose header lacks one of `type`, `client` and `tx`.
+pub(crate) fn any_incomplete_layout() -> impl Strategy<Value = Layout> {
+    (any_layout(), select(&["type", "client", "tx"])).prop_map(|(mut layout, missing)| {
+        layout.columns.retain(|&column| column != missing);
+        layout
+    })
+}
+
 /// `line`'s fields in the order of `columns`, as `spelling` writes them.
 fn fields(line: Line, spelling: Spelling, columns: &[&str]) -> String {
     let amount_last = columns.last() == Some(&"amount");

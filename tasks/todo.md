@@ -87,7 +87,7 @@ How each client gets there:
      no other test reaches: that the root file the README runs exists, reads with no malformed
      row, and prints this table and report.
    - **Red:** `backend/tests/it/cli.rs` gains, after `OVERVIEW`:
-     - `SAMPLE`, the root file's path;
+     - `SAMPLE_PATH`, the root file's path;
      - `SAMPLE_TABLE` and `SAMPLE_REPORT`;
      - the test `the_sample_input_prints_its_table_and_report`.
 
@@ -124,11 +124,16 @@ How each client gets there:
     commands are five, under four reasons; the evidence names commits, not `main`, which moves;
     a plainer sentence for what the fixture alone pins; and why 0006 is a new file.
   - Commit `docs(tasks): plan the sample input and keep the command line's plan`.
-- [ ] **1, red.** The fixture (Decisions, item 2), and the `CLAUDE.md` § Tests sentence.
+- [x] **1, red.** The fixture (Decisions, item 2), and the `CLAUDE.md` § Tests sentence.
   - With no root `transactions.csv`, `make deps fmt-check lint build` is green.
   - `cargo test --workspace --locked` gives 38 passed, 1 failed (the new test, on
-    `error: cannot open <repo>/backend/../transactions.csv`) and 1 ignored.
-  - Per-commit gate.
+    `error: cannot open <repo>/backend/../transactions.csv`) and 1 ignored. Run: "38 passed;
+    1 failed; 1 ignored", the stderr assertion failing on `cannot open …/transactions.csv: No
+    such file or directory`.
+  - Per-commit gate: `make ci` fails only on the new test; the name greps and the record scan are
+    silent. The code-reviewer found no blocker and no should-fix. Its nits are taken: the path is
+    `SAMPLE_PATH`, its doc comment holds wherever cargo runs, and `CLAUDE.md` names the binary as
+    the reader.
   - Commit `test(cli): pin the sample input's table and report`.
 - [ ] **1, green.** `transactions.csv` as above, README § Usage and § Layout, `CLAUDE.md`
       § Repository layout, and this plan's Review.

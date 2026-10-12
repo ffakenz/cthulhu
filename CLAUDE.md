@@ -170,7 +170,8 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
   `main.rs` plus modules that mirror `src`, and `support.rs` for helpers: `for_all`, which runs
   each law on `proptest`, the strategies in `support/generate.rs`, the rows spelled as CSV text
   in `support/spelling.rs` and the naive model in `support/model.rs`. `cli.rs` drives the binary
-  through `CARGO_BIN_EXE_cthulhu`, each fixture's input written into `CARGO_TARGET_TMPDIR`.
+  through `CARGO_BIN_EXE_cthulhu`, each fixture's input written into `CARGO_TARGET_TMPDIR`, except
+  the sample input, which the binary reads from the repository root.
 - A property test is named `prop_<law>` (`rust-properties`).
 
 ## Comments

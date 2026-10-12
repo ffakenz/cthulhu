@@ -12,6 +12,26 @@ use backend::run::SourceError;
 /// The overview, whose worked example is the contract's own.
 const OVERVIEW: &str = include_str!("../../../docs/overview.md");
 
+/// The path of the sample input, `transactions.csv` at the repository root.
+const SAMPLE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../transactions.csv");
+
+/// The table for the sample input.
+const SAMPLE_TABLE: &str = "\
+client,available,held,total,locked
+1,50.0001,0.0000,50.0001,false
+2,40.0000,0.0000,40.0000,false
+3,-75.5000,0.0000,-75.5000,true
+4,10.0000,5.5000,15.5000,false
+";
+
+/// The report for the sample input.
+const SAMPLE_REPORT: &str = "\
+1 rejected: the account is locked
+1 rejected: the amount is above available
+2 rejected: no such deposit for this client
+1 rejected: the deposit is not disputed
+";
+
 /// Every rejection reason but overflow, and every malformed kind, a malformed row first.
 const REJECTED_AND_MALFORMED: &str = "\
 type, client, tx, amount
@@ -127,6 +147,14 @@ fn the_overview_example_prints_its_table_and_report() {
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(String::from_utf8_lossy(&output.stdout), table);
     assert_eq!(String::from_utf8_lossy(&output.stderr), report);
+}
+
+#[test]
+fn the_sample_input_prints_its_table_and_report() {
+    let output = cthulhu(&[Path::new(SAMPLE_PATH)]).expect("the binary runs");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), SAMPLE_REPORT);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), SAMPLE_TABLE);
+    assert_eq!(output.status.code(), Some(0));
 }
 
 #[test]

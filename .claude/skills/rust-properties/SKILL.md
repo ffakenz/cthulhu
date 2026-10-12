@@ -80,6 +80,10 @@ generated spellings, near-misses included: every spelling that parses re-renders
   the run after too many. A strategy that builds only the inputs it means never runs out.
 - **A law replaces the examples it covers.** Delete the hand-picked examples it quantifies over;
   keep the black-box tests it does not reach.
+- **A generator is replaced only by one that writes every form it wrote.** Before deleting a
+  generator, list the input forms it produced; each form the contract admits stays generated,
+  whether or not a recorded break needs it. The recorded breaks are evidence of coverage, not its
+  definition.
 - **Properties live on the pure core:** parsers, folds, arithmetic, decisions and transitions,
   where a strategy reaches further than any fixture. The black-box backbone stays primary
   ([[functional-architecture]]).

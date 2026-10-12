@@ -1572,12 +1572,16 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use backend::csv_io::SinkError;
+use backend::run::SourceError;
+
 /// The overview, whose worked example is the contract's own.
 const OVERVIEW: &str = include_str!("../../../docs/overview.md");
 
-/// Every rejection reason but overflow, and every malformed kind.
-const MALFORMED: &str = "\
+/// Every rejection reason but overflow, and every malformed kind, a malformed row first.
+const REJECTED_AND_MALFORMED: &str = "\
 type, client, tx, amount
+deposit, 3, 13, 0
 deposit, 1, 1, 10.0
 deposit, 1, 1, 5.0
 withdrawal, 1, 2, 20.0
@@ -1597,18 +1601,17 @@ withdrawal, 3, 9,
 deposit, 3, 10, abc
 deposit, 3, 11, 1.23456
 deposit, 3, 12, 1000000000000000
-deposit, 3, 13, 0
 ";
 
-/// The table for `MALFORMED`: client 3, named only by malformed rows, has no account.
-const MALFORMED_TABLE: &str = "\
+/// The table for `REJECTED_AND_MALFORMED`: client 3, named only by malformed rows, has no account.
+const REJECTED_AND_MALFORMED_TABLE: &str = "\
 client,available,held,total,locked
 1,10.0000,0.0000,10.0000,false
 2,0.0000,0.0000,0.0000,true
 ";
 
-/// The report for `MALFORMED`.
-const MALFORMED_REPORT: &str = "\
+/// The report for `REJECTED_AND_MALFORMED`.
+const REJECTED_AND_MALFORMED_REPORT: &str = "\
 1 rejected: the tx id was used before
 1 rejected: the account is locked
 1 rejected: the amount is above available
@@ -1627,9 +1630,11 @@ const MALFORMED_REPORT: &str = "\
 /// A header and no rows.
 const HEADER_ONLY: &str = "type,client,tx,amount\n";
 
-/// Inputs whose header lacks `type`, `client` or `tx`: an empty file, and a header without `tx`.
-const INCOMPLETE: [(&str, &str); 2] =
-    [("empty.csv", ""), ("no-tx.csv", "type, client, amount\ndeposit, 1, 1.0\n")];
+/// An empty input, which has no header.
+const EMPTY: &str = "";
+
+/// A header without `tx`, then a row.
+const NO_TX: &str = "type, client, amount\ndeposit, 1, 1.0\n";
 
 /// One deposit.
 const ONE_DEPOSIT: &str = "type,client,tx,amount\ndeposit,1,1,1.0\n";
@@ -1637,6 +1642,11 @@ const ONE_DEPOSIT: &str = "type,client,tx,amount\ndeposit,1,1,1.0\n";
 /// Runs the binary with `arguments`.
 fn cthulhu(arguments: &[&Path]) -> io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).output()
+}
+
+/// Runs the binary with `arguments`, its stdout written to `stdout`.
+fn cthulhu_into(stdout: fs::File, arguments: &[&Path]) -> io::Result<Output> {
+    Command::new(env!("CARGO_BIN_EXE_cthulhu")).args(arguments).stdout(stdout).output()
 }
 
 /// These tests' scratch directory, created if missing.
@@ -1675,11 +1685,12 @@ fn the_overview_example_prints_its_table_and_report() {
 
 #[test]
 fn every_rejection_and_malformed_kind_is_counted_on_stderr() {
-    let path = input("malformed.csv", MALFORMED).expect("the scratch directory takes a file");
+    let path = input("rejected-and-malformed.csv", REJECTED_AND_MALFORMED)
+        .expect("the scratch directory takes a file");
     let output = cthulhu(&[&path]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(0));
-    assert_eq!(String::from_utf8_lossy(&output.stdout), MALFORMED_TABLE);
-    assert_eq!(String::from_utf8_lossy(&output.stderr), MALFORMED_REPORT);
+    assert_eq!(String::from_utf8_lossy(&output.stderr), REJECTED_AND_MALFORMED_REPORT);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), REJECTED_AND_MALFORMED_TABLE);
 }
 
 #[test]
@@ -1688,7 +1699,7 @@ fn a_wrong_argument_count_is_a_usage_error() {
     for arguments in [&[][..], &[path.as_path(), path.as_path()][..]] {
         let output = cthulhu(arguments).expect("the binary runs");
         assert_eq!(output.status.code(), Some(2));
-        assert!(output.stdout.is_empty());
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "");
         assert_eq!(String::from_utf8_lossy(&output.stderr), "usage: cthulhu <input.csv>\n");
     }
 }
@@ -1698,9 +1709,9 @@ fn a_missing_input_cannot_be_opened() {
     let path = scratch().expect("the scratch directory exists").join("missing.csv");
     let output = cthulhu(&[&path]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(3));
-    assert!(output.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.starts_with(&format!("error: cannot open {}: ", path.display())));
+    assert!(stderr.starts_with(&format!("error: cannot open {}: ", path.display())), "{stderr}");
 }
 
 #[test]
@@ -1708,20 +1719,23 @@ fn an_unreadable_input_stops_the_run_with_no_table() {
     let directory = scratch().expect("the scratch directory exists");
     let output = cthulhu(&[&directory]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(4));
-    assert!(output.stdout.is_empty());
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "error: the input cannot be read\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        format!("error: {}\n", SourceError::Unreadable)
+    );
 }
 
 #[test]
 fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
-    for (name, text) in INCOMPLETE {
+    for (name, text) in [("empty.csv", EMPTY), ("no-tx.csv", NO_TX)] {
         let path = input(name, text).expect("the scratch directory takes a file");
         let output = cthulhu(&[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(4));
-        assert!(output.stdout.is_empty());
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "");
         assert_eq!(
             String::from_utf8_lossy(&output.stderr),
-            "error: the header lacks type, client or tx\n"
+            format!("error: {}\n", SourceError::IncompleteHeader)
         );
     }
 }
@@ -1731,13 +1745,12 @@ fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
 fn a_full_output_is_a_write_failure() {
     let path = input("full.csv", ONE_DEPOSIT).expect("the scratch directory takes a file");
     let full = fs::File::options().write(true).open("/dev/full").expect("/dev/full opens");
-    let output = Command::new(env!("CARGO_BIN_EXE_cthulhu"))
-        .arg(&path)
-        .stdout(full)
-        .output()
-        .expect("the binary runs");
+    let output = cthulhu_into(full, &[&path]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(5));
-    assert_eq!(String::from_utf8_lossy(&output.stderr), "error: the output cannot be written\n");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        format!("error: {}\n", SinkError::Unwritable)
+    );
 }
 ```
 
@@ -2014,13 +2027,33 @@ Green:
 
 Red:
 
-- [ ] `backend/tests/it/cli.rs` as Test code says; `main.rs`: `mod cli;`. `docs/overview.md`: the
+- [x] `backend/tests/it/cli.rs` as Test code says; `main.rs`: `mod cli;`. `docs/overview.md`: the
       `Report:` block after the worked example's Output block.
-- [ ] `backend/src/main.rs` stays `fn main() {}`. `cargo test --workspace --locked` fails on
+- [x] `backend/src/main.rs` stays `fn main() {}`. `cargo test --workspace --locked` fails on
       exactly six `cli` tests, since each expects a table, a status other than `0`, or a line on
       stderr. 32 pass; on macOS the `/dev/full` fixture is ignored, and on Linux it is a seventh
-      failure.
-- [ ] Per-commit gate (red); commit `test(cli): …`.
+      failure. Run: "32 passed; 6 failed; 1 ignored".
+  - The table fixtures fail on an empty stdout; the others on status `0` where `2`, `3` or `4`
+    is due.
+  - The overview's three blocks parse, and `cli.rs` matches the plan's copy after `cargo fmt`.
+- [x] Review fixes, staged before the red commit. The code-reviewer found no blocker and two
+      should-fixes, both taken:
+  - the rejected-and-malformed fixture asserts stderr first, so its red shows the missing
+    report;
+  - the error lines are built from the public values (`SourceError`, `SinkError`), not copied
+    prose.
+
+  Nits taken:
+  - a malformed row comes first, so the report's order is not the input's;
+  - `cthulhu_into` serves the `/dev/full` fixture;
+  - the incomplete inputs are named constants, and the main fixture is
+    `REJECTED_AND_MALFORMED`;
+  - plain `assert!`s print what they saw;
+  - the test crate's module doc names `cli`.
+
+  Re-run: "32 passed; 6 failed; 1 ignored", and the stderr fixture now fails on stderr.
+- [x] Per-commit gate (red); commit `test(cli): …`. The deps, fmt-check, lint and build checks
+      are green; the name greps and the record scan are silent.
 
 Green:
 

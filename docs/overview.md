@@ -111,6 +111,14 @@ client,available,held,total,locked
 4,0.0000,0.0000,0.0000,false
 ```
 
+Report:
+
+```text
+1 rejected: the account is locked
+1 rejected: the amount is above available
+1 rejected: no such deposit for this client
+```
+
 Client 2 withdrew a deposit that was then charged back: it owes 10, is locked, and its last
 deposit is rejected. Clients 3 and 4 are named only by rejected commands, which still open their
 accounts.

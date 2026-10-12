@@ -23,8 +23,9 @@ test: ## Run every test
 	$(CARGO) test --workspace --locked
 
 # The crates the decision records admit for the program, besides the workspace's own packages.
-ADMITTED := arrayvec autocfg csv csv-core itoa memchr num-traits proc-macro2 quote rust_decimal \
-    ryu serde serde_core serde_derive syn thiserror thiserror-impl unicode-ident
+ADMITTED := anstyle arrayvec autocfg clap clap_builder clap_derive clap_lex csv csv-core heck itoa \
+    memchr num-traits proc-macro2 quote rust_decimal ryu serde serde_core serde_derive syn \
+    thiserror thiserror-impl unicode-ident
 
 # The crates the decision records admit for tests only: never in the program's build graph.
 ADMITTED_DEV := bitflags cfg-if chacha20 core_detect cpufeatures getrandom libc proptest r-efi \
@@ -47,7 +48,7 @@ deps: ## Fail when the build graph holds a crate no decision record admits, or t
 ci: deps fmt-check lint build test ## The commit gate
 
 run: ## Run the cthulhu binary on INPUT, the table on stdout: make run INPUT=<file>
-	@$(CARGO) run --locked --bin cthulhu -- $${INPUT:+"$$INPUT"}
+	@$(CARGO) run --locked --bin cthulhu -- $${INPUT:+-- "$$INPUT"}
 
 clean: ## Remove build output
 	$(CARGO) clean

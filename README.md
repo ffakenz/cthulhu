@@ -21,8 +21,8 @@ rustfmt and clippy. Install it once from the repository root:
 rustup toolchain install
 ```
 
-Admitted crates: `csv`, `serde`, `rust_decimal` and `thiserror`, with the 14 crates they build on;
-for tests only, `proptest`, with the 13 more it builds on. All of them are in use.
+Admitted crates: `csv`, `serde`, `rust_decimal`, `thiserror` and `clap`, with the 19 crates they
+build on; for tests only, `proptest`, with the 13 more it builds on. All of them are in use.
 
 ## Usage
 
@@ -34,8 +34,9 @@ make ci                                       # the commit gate: deps, fmt-check
 make run INPUT=transactions.csv > output.csv  # the accounts table for the sample input
 ```
 
-`make run` passes `INPUT` to the binary as one argument, with no shell expansion. By default, zsh
-does not expand a `~` after `=` either, so under zsh write `INPUT=$HOME/…`, not `INPUT=~/…`.
+`make run` passes `INPUT` to the binary as the input's path, after `--`, with no shell expansion, so
+a path that begins with `-` runs too. By default, zsh does not expand a `~` after `=` either, so
+under zsh write `INPUT=$HOME/…`, not `INPUT=~/…`.
 
 The engine runs as:
 
@@ -49,13 +50,16 @@ commands, which the report counts on stderr. A fixture in `backend/tests/it/cli.
 table and report, so `make ci` fails when the file changes and that fixture does not.
 
 The accounts table goes to stdout, written only once the run succeeds. The counts of rejected
-commands and malformed rows go to stderr, one line each. The exit status of `cthulhu`, which
-`cargo run` passes on, is `0` on success, `2` for not exactly one argument, `3` when the input
-cannot be opened, `4` when it cannot be read or its header lacks `type`, `client` or `tx`, and `5`
-when the table or the report cannot be written; `make run` names it in its `Error` line.
+commands and malformed rows go to stderr, one line each. `--help` (`-h`) and `--version` (`-V`)
+write the help and the version to stdout instead, and a path that begins with `-` goes after `--`.
+The exit status of `cthulhu`, which `cargo run` passes on, is `0` on success, `2` for a usage
+error (no path, a second one, an empty one or an unknown flag), `3` when the input cannot be
+opened, `4` when it cannot be read or its header lacks `type`, `client` or `tx`, and `5` when the
+table, the report, the help or the version cannot be written; `make run` names it in its `Error`
+line.
 
-The design record *The command-line contract* fixes the argument, the streams and the exit
-status; [docs/overview.md](docs/overview.md) gives the formats and rules.
+The design record *The command-line contract with help and version* fixes the arguments, the
+streams and the exit status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 
 ## Design
 

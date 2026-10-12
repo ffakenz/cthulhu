@@ -192,15 +192,40 @@ The person signed off this plan as written.
     the fixed second argument, the commit body, and a renamed binary that no writer holds open,
     first as a hard link, then, after the hard link's SIGKILLs, as `argv[0]`.
   - Commit `test(cli): pin the help, the version and clap's usage errors`.
-- [ ] **4, green.** `clap` 4.6.7 in `backend`, and `ADMITTED` gains `clap`, `clap_builder`,
+- [x] **4, green.** `clap` 4.6.7 in `backend`, and `ADMITTED` gains `clap`, `clap_builder`,
       `clap_derive`, `clap_lex`, `anstyle` and `heck`. `main.rs` parses with `try_parse_from` and
       splits `clap::Error` with `use_stderr`. `clippy.toml` disallows the clap calls that read the
-      process's arguments or exit it, if clippy accepts their paths. `README.md`,
-      `docs/overview.md`, `docs/architecture.md`, `CLAUDE.md` § Dependencies and the CLI line of
-      the `functional-architecture` reference follow.
+      process's arguments, exit it or write to its streams, if clippy accepts their paths.
+      `README.md`, `docs/overview.md`, `docs/architecture.md`, `CLAUDE.md` § Dependencies and the
+      CLI line of the `functional-architecture` reference follow.
+  - `cargo update --workspace` added exactly the six crates: `anstyle` 1.0.14, `clap`,
+    `clap_builder` and `clap_derive` 4.6.7, `clap_lex` 1.1.1 and `heck` 0.5.0.
+  - Run: `make ci` green, 45 passed and 1 ignored; the green's output matches every fixture of
+    the red byte for byte. The first runs failed only by SIGKILL, from the red's hard link, which
+    the red now replaces with `argv[0]`. Sixty further runs of `it` passed but one, a pre-existing
+    race that the next commit fixes.
+  - `clippy.toml`: clippy 1.88 takes `clap::Parser::{parse, try_parse, parse_from, update_from}`,
+    `clap::Command::{get_matches, get_matches_mut, try_get_matches, get_matches_from, print_help,
+    print_long_help}` and `clap::error::Error::{exit, print}`, and says nothing in the packages
+    without clap; `clap::Error::{exit, print}`, an alias's path, does not resolve. A probe, never
+    committed, calling all twelve from `main.rs` drew all twelve `disallowed_methods` warnings.
+  - `make run` passes `--` before `INPUT`, so a path that begins with `-` still runs through it;
+    in `sh`, an empty `INPUT` gives no argument, and `a b.csv` or `-dash.csv` one path after `--`.
+    `make run INPUT=transactions.csv` prints the sample's table byte for byte.
   - Once, from the root, with the person's consent: `cargo run -- transactions.csv`,
     `cargo run -- --help` and `cargo run -- --version`.
+    - Run: the sample exits 0 with its table on stdout, byte for byte, and its report on stderr;
+      `--help` prints `HELP` and `--version` prints `cthulhu 0.1.0`, both exiting 0.
+  - The code-reviewer found no blocker. Its three should-fixes are taken: `clippy.toml` also
+    disallows `clap::Command`'s entry points, which the derive reaches through `CommandFactory`;
+    the `rust-effects` skill and the Banned table name clap's calls; and `make run` passes `--`
+    before `INPUT`. Its nits are taken too: `main`'s doc comment, the manifest's clap line within
+    100 columns, and reasons that name the help and the version among the exits.
   - Commit `feat(cli): parse the arguments with clap`.
+- [ ] **4, fix.** The two tests that need a stream no write can reach take a socket shut for
+      writing, not a pipe whose reading end was dropped: another process can hold a copy of that
+      reading end, and a write then succeeds. A pre-existing race, found while running the green.
+  - Commit `test(cli): make the unwritable streams fail whoever holds them`.
 - [ ] **5.** `rand` 0.10 in `backend`'s dev-dependencies; the Makefile, `CLAUDE.md` and
       `README.md` say "the dev targets" where they said "tests"; this plan's Review.
   - Commit `chore(backend): add rand as a dev-dependency`.

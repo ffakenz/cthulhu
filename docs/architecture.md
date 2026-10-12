@@ -90,7 +90,7 @@ one partition, and the reference that every later runtime must equal.
 ```text
 ┌────────────────────────────────────────────────────────────────┐
 │ backend                                                        │
-│   main.rs  composition root: argument, file, stdio, exit code  │
+│   main.rs  composition root: arguments, file, stdio, exit code │
 │   csv_io   CsvSource, render_csv, SinkError                    │
 │            (csv, serde)                                        │
 │   text_io  render_report                                       │
@@ -126,7 +126,7 @@ does not build.
 | `memory` | `store` | `MemoryLedger`, `MemorySeenIds` | `domain`, `run` |
 | `csv_io` | `backend` | `CsvRow`, `CsvSource`, `render_csv`, `SinkError` | `csv`, `serde`, `thiserror`, `domain`, `run` |
 | `text_io` | `backend` | `render_report` | `domain`, `run` |
-| `main.rs` | `backend` | the argument, the input file, stdio, `ExitCode` | `thiserror`, `csv_io`, `text_io`, `memory`, `run` |
+| `main.rs` | `backend` | the arguments, the input file, stdio, `ExitCode` | `clap`, `thiserror`, `csv_io`, `text_io`, `memory`, `run` |
 
 - `domain` is the model in the records' terms: values, entities and messages, each entity reached
   by its key (*A domain model in the records' language*, *Entities identified by their keys*).

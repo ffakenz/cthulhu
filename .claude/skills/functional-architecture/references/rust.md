@@ -106,6 +106,7 @@ The lint in each row rejects the call; the last column is what to write instead.
 | `print!`, `println!`, `eprint!`, `eprintln!`, `dbg!` | `print_stdout`, `print_stderr`, `dbg_macro` | `writeln!` to an injected `impl Write` |
 | `#[allow(…)]` | `allow_attributes`, `allow_attributes_without_reason` | `#[expect(…, reason = "…")]` |
 | `SystemTime::now`, `Instant::now`, `elapsed` on either, `env::var*`, `env::args*`, `env::current_dir`, `env::temp_dir`, `thread::spawn`, `thread::Builder::spawn`, `thread::sleep`, `panic::catch_unwind` | `disallowed_methods` | a port, or a value passed in; `clippy.toml` names the alternative for each |
+| clap's `Parser::parse`, `try_parse`, `parse_from`, `update_from`; `Command::get_matches`, `get_matches_mut`, `try_get_matches`, `get_matches_from`, `print_help`, `print_long_help`; `clap::Error::exit`, `print` | `disallowed_methods` | `try_parse_from` over `main`'s argument snapshot, writing the `clap::Error` through the handle `main` locked |
 
 ### Review-only
 
@@ -372,7 +373,7 @@ impl Clock for SystemClock {
 | Errors | one enum per boundary, beside its adapter |
 | I/O | a port declared by its consumer, plus an adapter module that implements it |
 | Mapping | `TryFrom` and `From` in a per-boundary adapter module; foreign types stop there |
-| CLI surface | `FromStr` for each argument, and the exit-code mapping, in `main.rs` |
+| CLI surface | a `clap` parser over `main`'s argument snapshot (`try_parse_from`), each argument a `FromStr` type, and the exit-code mapping, in `main.rs` |
 
 **The compiler-checked form.** Review keeps logic modules free of adapters. When the core must
 never reach an adapter, the core becomes its own workspace crate with no dependency on the adapter

@@ -89,12 +89,12 @@ the environment, the arguments or stdio; everything it builds is passed down as 
 
 ## Dependencies
 
-Standard library first. The program's admitted crates are `csv`, `serde`, `rust_decimal` and
-`thiserror`, with the 14 crates they build on; the tests' are `proptest`, with the 13 more it
-builds on; a decision record admits both sets. Never add any other dependency — no `cargo add`, no
-new line in a manifest's dependency tables — without explicit approval from a person: propose it
-with the rationale and the alternatives considered, wait for sign-off, then record it as a
-decision record.
+Standard library first. The program's admitted crates are `csv`, `serde`, `rust_decimal`,
+`thiserror` and `clap`, with the 19 crates they build on; the tests' are `proptest`, with the 13
+more it builds on; a decision record admits both sets. Never add any other dependency — no
+`cargo add`, no new line in a manifest's dependency tables — without explicit approval from a
+person: propose it with the rationale and the alternatives considered, wait for sign-off, then
+record it as a decision record.
 `make deps` fails the gate when the build graph (`cargo tree`, every dependency kind, feature and
 target) holds a package that is neither a workspace member nor an admitted crate, or when the
 program's graph holds a crate admitted for tests only. It reads the graph, not `Cargo.lock`, which

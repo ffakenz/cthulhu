@@ -10,6 +10,9 @@ name = "cthulhu"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4.6.7", default-features = false, features = [
+    "std", "help", "usage", "error-context", "derive",
+] }
 csv = "1.4"
 engine = { path = "../libs/engine" }
 serde = { version = "1", features = ["derive"] }

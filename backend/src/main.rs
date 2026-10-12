@@ -1,6 +1,6 @@
-//! The composition root: reads the one argument, opens the input it names, runs the input over
+//! The composition root: parses the arguments, opens the input they name, runs the input over
 //! in-memory stores, writes the accounts table to stdout and the report to stderr, and maps every
-//! failure to an exit status.
+//! failure to an exit status; asked for the help or the version, it writes that to stdout instead.
 
 use std::convert::Infallible;
 use std::ffi::OsString;
@@ -11,11 +11,12 @@ use std::process::ExitCode;
 
 use backend::csv_io::{CsvSource, SinkError, render_csv};
 use backend::text_io::render_report;
+use clap::Parser;
 use engine::run::{RunError, run};
 use store::memory::{MemoryLedger, MemorySeenIds};
 
-/// Runs the input the arguments name. A failure's line goes to stderr, and its exit status is
-/// returned whether or not that line could be written.
+/// Runs the input the arguments name, or writes the help or the version. A failure's message goes
+/// to stderr, and its exit status is returned whether or not that message could be written.
 fn main() -> ExitCode {
     #[expect(clippy::disallowed_methods, reason = "the composition root reads the arguments once")]
     let arguments = std::env::args_os();
@@ -29,14 +30,35 @@ fn main() -> ExitCode {
     }
 }
 
-/// Opens the input the arguments name and runs it: the table to `stdout` once the run succeeds,
-/// then the report to `stderr`.
+/// The arguments: the input's path, beside the help and version flags clap adds.
+#[derive(Debug, Parser)]
+#[command(
+    name = "cthulhu",
+    bin_name = "cthulhu",
+    version,
+    about = "Reads client and dispute commands from a CSV file and prints the accounts table"
+)]
+struct Arguments {
+    /// The CSV file of commands to read.
+    #[arg(value_name = "input.csv")]
+    input: PathBuf,
+}
+
+/// Parses the arguments, then opens the input they name and runs it: the table to `stdout` once
+/// the run succeeds, then the report to `stderr`. Asked for the help or the version, writes that
+/// to `stdout` and opens nothing.
 fn execute(
     arguments: impl IntoIterator<Item = OsString>,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), Failure> {
-    let path = input(arguments).ok_or(Failure::Usage)?;
+    let path = match Arguments::try_parse_from(arguments) {
+        Ok(Arguments { input }) => input,
+        Err(usage) if usage.use_stderr() => return Err(Failure::Usage(usage)),
+        Err(asked) => {
+            return write!(stdout, "{asked}").and_then(|()| stdout.flush()).map_err(Failure::Help);
+        }
+    };
     let file = File::open(&path).map_err(|error| Failure::Open { path, error })?;
     let summary =
         run(CsvSource::new(file), &mut MemoryLedger::default(), &mut MemorySeenIds::default())
@@ -45,21 +67,16 @@ fn execute(
     render_report(&summary.report, stderr).map_err(Failure::Report)
 }
 
-/// The input's path: the one argument after the program's name; `None` for any other count.
-fn input(arguments: impl IntoIterator<Item = OsString>) -> Option<PathBuf> {
-    let mut given = arguments.into_iter().skip(1);
-    match (given.next(), given.next()) {
-        (Some(path), None) => Some(PathBuf::from(path)),
-        (None, _) | (Some(_), Some(_)) => None,
-    }
-}
-
 /// Why the program failed, by the step that failed.
 #[derive(Debug, thiserror::Error)]
 enum Failure {
-    /// Not exactly one argument.
-    #[error("usage: cthulhu <input.csv>")]
-    Usage,
+    /// The arguments are not one input path: clap's message, less the newline it ends with, which
+    /// `main` writes.
+    #[error("{}", .0.to_string().trim_end())]
+    Usage(clap::Error),
+    /// The help or the version could not be written.
+    #[error("error: cannot write the help or the version: {0}")]
+    Help(io::Error),
     /// The input could not be opened.
     #[error("error: cannot open {}: {error}", .path.display())]
     Open { path: PathBuf, error: io::Error },
@@ -78,10 +95,10 @@ impl Failure {
     /// The exit status of the step that failed.
     fn code(&self) -> ExitCode {
         ExitCode::from(match self {
-            Self::Usage => 2,
+            Self::Usage(_) => 2,
             Self::Open { .. } => 3,
             Self::Run(_) => 4,
-            Self::Table(_) | Self::Report(_) => 5,
+            Self::Help(_) | Self::Table(_) | Self::Report(_) => 5,
         })
     }
 }

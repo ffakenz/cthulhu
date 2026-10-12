@@ -16,9 +16,8 @@ whole ticket ends up fixing something that was never broken.
 
 ## Phase 1 — <name>
 
-- [ ] Red: `<test name>` — fails with `<observed>` / expected `<expected>`.
+- [ ] Red: `<test name>`, failing for the reason it states.
 - [ ] Green: `<the smallest change>`
-- [ ] Verify: `<lint>` · `<build>` · `<tests, with counts>`
 
 ## Phase 2 — <name>
 

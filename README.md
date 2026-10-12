@@ -26,10 +26,12 @@ only, `proptest`, with the 13 more it builds on. All of them are in use.
 
 ## Usage
 
+From the repository root:
+
 ```sh
-make                                   # list the targets
-make ci                                # the commit gate: deps, fmt-check, lint, build, test
-make run INPUT=input.csv > output.csv  # the accounts table for input.csv
+make                                          # list the targets
+make ci                                       # the commit gate: deps, fmt-check, lint, build, test
+make run INPUT=transactions.csv > output.csv  # the accounts table for the sample input
 ```
 
 `make run` passes `INPUT` to the binary as one argument, with no shell expansion. By default, zsh
@@ -38,8 +40,13 @@ does not expand a `~` after `=` either, so under zsh write `INPUT=$HOME/…`, no
 The engine runs as:
 
 ```sh
-cargo run -- input.csv > output.csv
+cargo run -- transactions.csv > output.csv
 ```
+
+`transactions.csv`, at the repository root, is a sample input: four clients, every command, a
+chargeback that leaves an account negative and locked, a dispute still open, and five refused
+commands, which the report counts on stderr. A fixture in `backend/tests/it/cli.rs` pins its
+table and report, so `make ci` fails when the file changes and that fixture does not.
 
 The accounts table goes to stdout, written only once the run succeeds. The counts of rejected
 commands and malformed rows go to stderr, one line each. The exit status of `cthulhu`, which
@@ -92,6 +99,7 @@ status; [docs/overview.md](docs/overview.md) gives the formats and rules.
 ├── clippy.toml           lint configuration, including the disallowed methods
 ├── rustfmt.toml          formatting
 ├── rust-toolchain.toml   the pinned toolchain
+├── transactions.csv      a sample input: `cargo run -- transactions.csv`
 └── Makefile              the targets above
 ```
 

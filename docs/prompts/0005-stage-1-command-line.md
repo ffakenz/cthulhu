@@ -8,7 +8,7 @@ an input file into the accounts table. It started from the library core, held by
 `proptest` on `feat/stage-1-core`, before that branch had reached `main`.
 
 **Outcome:** `feat/stage-1-cli`, cut from `main` once the library core landed there, holds the
-command line. Its first commit is the plan of record, [tasks/todo.md](../../tasks/todo.md), with the
+command line. Its first commit is the plan of record, [tasks/stage-1-cli-plan.md](../../tasks/stage-1-cli-plan.md), with the
 stage 1 and proptest plans kept beside it as
 [tasks/stage-1-library-plan.md](../../tasks/stage-1-library-plan.md) and
 [tasks/stage-1-proptest-plan.md](../../tasks/stage-1-proptest-plan.md). Three red and green pairs

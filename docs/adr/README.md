@@ -32,3 +32,4 @@ Records here state architecture principles. How the engine treats its input is i
 - [14. Entities identified by their keys](0014-entities-identified-by-their-keys.md)
 - [15. csv, serde, rust_decimal and proptest as dependencies](0015-csv-serde-rust-decimal-and-proptest-as-dependencies.md)
 - [16. Layers as packages that depend inward](0016-layers-as-packages-that-depend-inward.md)
+- [17. csv, serde, rust_decimal, thiserror, clap, proptest and rand as dependencies](0017-csv-serde-rust-decimal-thiserror-clap-proptest-and-rand-as-dependencies.md)

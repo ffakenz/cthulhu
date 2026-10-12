@@ -234,11 +234,28 @@ pub(crate) struct Layout {
     last_end: bool,
 }
 
-/// Any layout: the four columns in any order, with a column no line needs inserted or not.
+impl Layout {
+    /// `line` as this layout carries it: under a header that names no `amount`, a deposit or a
+    /// withdrawal becomes a dispute of the same client and tx id.
+    pub(crate) fn fit(&self, line: Line) -> Line {
+        if moves_money(line.kind) && !self.columns.contains(&"amount") {
+            Line { kind: "dispute", ..line }
+        } else {
+            line
+        }
+    }
+}
+
+/// Any layout: `type`, `client` and `tx` in any order, with `amount`, most often, and a column no
+/// line needs, each inserted or not.
 pub(crate) fn any_layout() -> impl Strategy<Value = Layout> {
-    let four = vec!["type", "client", "tx", "amount"];
+    let three = vec!["type", "client", "tx"];
+    let inserted = (option::weighted(0.9, 0..=3_usize), option::of(0..=4_usize));
     let columns =
-        (Just(four).prop_shuffle(), option::of(0..=4_usize)).prop_map(|(mut columns, note)| {
+        (Just(three).prop_shuffle(), inserted).prop_map(|(mut columns, (amount, note))| {
+            if let Some(at) = amount {
+                columns.insert(at.min(columns.len()), "amount");
+            }
             if let Some(at) = note {
                 columns.insert(at.min(columns.len()), "note");
             }

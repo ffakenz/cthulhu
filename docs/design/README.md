@@ -19,3 +19,4 @@ index and those status lines carry a number.
 - [6. Client commands refused on locked accounts](0006-client-commands-refused-on-locked-accounts.md)
 - [7. The command-line contract](0007-the-command-line-contract.md)
 - [8. The command-line contract with help and version](0008-the-command-line-contract-with-help-and-version.md)
+- [9. Exact decimal amounts and balances with four places](0009-exact-decimal-amounts-and-balances-with-four-places.md)

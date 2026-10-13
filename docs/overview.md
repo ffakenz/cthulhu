@@ -68,7 +68,7 @@ Dispute commands apply on locked accounts too. An arithmetic overflow would reje
 
 ## Input
 
-*Rows parsed into commands at the boundary*, *Exact decimal amounts with four places*.
+*Rows parsed into commands at the boundary*, *Exact decimal amounts and balances with four places*.
 
 - A header naming `type`, `client`, `tx` and optionally `amount`, in any order; whitespace around
   fields is ignored.
@@ -149,7 +149,8 @@ accounts.
 
 Every runtime keeps these. No test computes what a run should give: the laws compare runs of the
 engine with each other, after any generated input, and fixtures through the binary pin the
-numbers (*Correctness defined by equations between runs*).
+numbers (*Correctness defined by equations between runs*). `docs/testing.md` says which level of
+tests checks what.
 
 1. `held` equals the sum of the client's `Disputed` deposits, and is never negative.
 2. `total` equals deposited minus withdrawn minus charged back.

@@ -56,6 +56,7 @@ cthulhu/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
 │   ├── patterns.md       the patterns the architecture is built from
+│   ├── testing.md        the levels of tests, how they relate, where a new check goes
 │   ├── roadmap.md        the benchmark-gated stages ahead
 │   ├── adr/              architecture decision records, their index and template
 │   ├── design/           design records: how the engine treats its input
@@ -193,6 +194,7 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - No test re-implements the engine: a law compares runs of the engine with each other, and a
   fixture holds an output computed by hand.
 - A property test is named `prop_<law>` (`rust-properties`).
+- A new check goes at the lowest level of tests that can see what it pins: `docs/testing.md`.
 
 ## Comments
 

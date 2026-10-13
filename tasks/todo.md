@@ -111,7 +111,7 @@ two new laws and on nothing else.
 - [x] **9.** The pair. Commit `test(run): dispute a resolved deposit again`.
 - [ ] **10.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
       check. The results go in the Review.
-- [ ] **11.** `docs/testing.md`, and the docs that name the record or link the strategy. Commit
+- [x] **11.** `docs/testing.md`, and the docs that name the record or link the strategy. Commit
       `docs(testing): describe the testing strategy`.
 - [ ] **12.** One `code-reviewer` run on the branch; its fixes go in new commits.
 - [ ] **13.** The Review and any lesson. Commit `docs(tasks): close the audit fixes plan`.

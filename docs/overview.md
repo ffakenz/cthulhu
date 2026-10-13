@@ -64,7 +64,9 @@ order listed; the first that fails names the reason.
 | `chargeback` | no such deposit for this client: `UnknownDeposit`; deposit `Settled`: `NotDisputed` | `ChargedBack` |
 
 Dispute commands apply on locked accounts too. An arithmetic overflow would reject a command as
-`Overflow`; the amount cap keeps every balance exact, so it never occurs.
+`Overflow`: a balance's arithmetic refuses a result past the largest balance, about 7.9 × 10^24
+either way, so every balance stays exact. An overflow never occurs, since the amount cap keeps
+every run below that bound.
 
 ## Input
 

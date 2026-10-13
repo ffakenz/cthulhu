@@ -62,7 +62,8 @@ mapped the 40 recorded breaks onto the new tests, and the plan was approved.
 The plan was revised for `main` at `28ab587`:
 - the crate now lives in `app/tests/it`;
 - the record takes the next free number;
-- the plan is kept in `tasks/todo.md`;
+- the plan is kept as the plan of record, now
+  [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md);
 - one review runs per branch.
 
 Once it was approved again, the plan, the record and the model-free suite landed. The recorded

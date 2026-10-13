@@ -230,13 +230,15 @@ fn input(name: &str, contents: impl AsRef<[u8]>) -> io::Result<PathBuf> {
     Ok(path)
 }
 
-/// One deposit by each client from 1 to `clients`: the table of three hundred is longer than the
-/// CSV writer's 8 KiB buffer, where the table of one fits.
+/// One deposit by each client from 1 to `clients`, each on a tx id of its own: the table of three
+/// hundred is longer than the CSV writer's 8 KiB buffer, where the table of one fits.
 #[cfg(unix)]
 fn deposits(clients: u16) -> String {
-    (1..=clients).fold(String::from("type,client,tx,amount\n"), |text, client| {
-        text + &format!("deposit,{client},{client},1.0\n")
-    })
+    (1..=clients)
+        .zip(1_u32..)
+        .fold(String::from("type,client,tx,amount\n"), |text, (client, tx)| {
+            text + &format!("deposit,{client},{tx},1.0\n")
+        })
 }
 
 /// The code block after the line `label` in the overview.

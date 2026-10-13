@@ -47,6 +47,6 @@ rounds silently once a value outgrows its 96-bit mantissa.
   - an `i64` in units of 0.0001: it tops out at 9.2 × 10^14, so sums over many deposits overflow
     at ordinary amounts;
   - a `Display` that never panics: it would still print balances that had rounded;
-  - an `i128` in units of 0.0001: exact without a bound, but replacing `Decimal` throughout needs
-    a dependency record of its own.
+  - an `i128` in units of 0.0001: exact up to about 1.7 × 10^34, far past any valid input, but
+    replacing `Decimal` throughout needs a dependency record of its own.
 - Deferred: rounding inputs to four places. That needs a rounding mode, and a record of its own.

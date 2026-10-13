@@ -120,9 +120,14 @@ two new laws and on nothing else.
       passing the largest balance`, `refactor(domain): name the units and the way of a step's move`
       and `test(domain): pin the largest balance and refuse one unit past it`.
 - [x] **13.** The Review and any lesson. Commit `docs(tasks): close the audit fixes plan`.
-- [ ] **14.** Prompt history 0009, alone:
+- [x] **14.** Prompt history 0009, alone:
       `docs(prompts): add prompt history 0009 (test audit fixes)`.
-- [ ] **15.** Report what is on the branch. Landing is the person's.
+- [x] **15.** Report what is on the branch. Landing is the person's.
+      Deviation: the person chose three of the review's nits, each fixed in a commit of its own:
+      `docs(design): state where the rejected i128 overflows`,
+      `docs(testing): ask a stage for equivalence and its own gate` and
+      `docs(overview): credit the bound, not the amount cap, with exact balances`. This plan and
+      prompt history 0009 record them.
 
 ## Review
 
@@ -186,6 +191,10 @@ two new laws and on nothing else.
   cap keeps runs off the bound.
 - The archive ticked the closed plan's last two items, by precedent, and prompt history 0008's
   narrative still says the plan is kept in `tasks/todo.md`.
+
+After the hand-off, the person chose the three nits that were inaccuracies in this branch's own
+docs: the record's `i128`, the order of work, and the overview's credit to the cap. Each is fixed
+in a commit of its own; the other four stay open.
 
 The audit's nits stay as they were; the person chose the should-fix findings only. No lesson: the
 person corrected nothing.

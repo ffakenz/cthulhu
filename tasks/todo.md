@@ -109,12 +109,83 @@ two new laws and on nothing else.
 - [x] **8.** The edges at 10^15 and `u64::MAX`. Commit
       `test(domain): draw 10^15 among the amounts too large`.
 - [x] **9.** The pair. Commit `test(run): dispute a resolved deposit again`.
-- [ ] **10.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
+- [x] **10.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
       check. The results go in the Review.
+      Deviation: two of the table's breaks, the 16-digit whole part and the resolve that drops its
+      deposit, had been caught before by fixtures alone; the laws now catch them too.
 - [x] **11.** `docs/testing.md`, and the docs that name the record or link the strategy. Commit
       `docs(testing): describe the testing strategy`.
-- [ ] **12.** One `code-reviewer` run on the branch; its fixes go in new commits.
-- [ ] **13.** The Review and any lesson. Commit `docs(tasks): close the audit fixes plan`.
+- [x] **12.** One `code-reviewer` run on the branch; its fixes go in new commits.
+      Deviation: no blocker. The three should-fixes landed as `docs(engine): describe overflow as
+      passing the largest balance`, `refactor(domain): name the units and the way of a step's move`
+      and `test(domain): pin the largest balance and refuse one unit past it`.
+- [x] **13.** The Review and any lesson. Commit `docs(tasks): close the audit fixes plan`.
 - [ ] **14.** Prompt history 0009, alone:
       `docs(prompts): add prompt history 0009 (test audit fixes)`.
 - [ ] **15.** Report what is on the branch. Landing is the person's.
+
+## Review
+
+**What the work became.** Sixteen commits on `9e4fe53`; the test crate went from 24 tests to 28.
+- A balance is bounded at ±(2^96 − 1) × 10^−4. Its arithmetic refuses a result rather than round
+  it, and printing one no longer panics. The record *Exact decimal amounts and balances with four
+  places* supersedes *Exact decimal amounts with four places*.
+- Three laws and an example pin the bound:
+  - every reached balance prints with four decimals;
+  - two moves add up the same in any grouping;
+  - a balance holds 2^32 of any amount;
+  - the largest balance prints, and one unit past it, either way, is refused.
+- `Display for Amount` is gone. The amount round trip prints through `Balance`, as the table does.
+- The four test gaps are closed:
+  - the reason a command gets when two checks fail;
+  - a misspelled header column;
+  - 10^15 as an edge of the amounts too large;
+  - a resolved deposit disputed again.
+- `docs/testing.md` covers:
+  - the levels of tests and the two links between them;
+  - where a new check goes and the order of work;
+  - what is ahead and what is left out.
+
+  It names no outside project.
+
+**Evidence.** Each break ran in a scratch copy, never in the repo.
+
+| Break | Fails | Before the branch |
+|---|---|---|
+| the lock checked before the repeat | the rejected-and-malformed fixture | escaped every test |
+| the funds checked before the lock | the rejected-and-malformed fixture | escaped every test |
+| header names compared ignoring case | `prop_a_header_lacking_type_client_or_tx_stops_the_run` | escaped every test |
+| a whole part of 16 digits accepted | `prop_text_an_amount_refuses_says_why`, in 3 runs of 3; also the malformed-line law and two fixtures | two fixtures only |
+| a resolve that drops its deposit | `prop_equivalent_commands_leave_the_same_accounts`, on the new pair; also a fixture | one fixture only |
+| the bound set at 10^20 | `prop_any_amount_doubled_32_times_is_a_balance` | no bound yet |
+| the bound dropped | the printing and grouping laws, as the red showed | no bound yet |
+| the bound clamping instead of refusing | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
+| the bound made strict | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
+| the bound lowered to 5 × 10^24 | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
+
+**What the framing got wrong.**
+1. The plan called every gap a break that escaped. Two of them, the 16-digit whole part and the
+   resolve that drops its deposit, had been caught by fixture wording alone: they escaped the laws,
+   not the suite.
+2. The plan's balance laws pinned the bound only between 4.3 × 10^24 and 7.9 × 10^24. A bound that
+   clamped, was strict, or sat lower passed every law. The review asked for the exact example that
+   now catches all three.
+3. The first draft of `docs/testing.md` claimed that no run reaches a refused amount's reason, or
+   zero from below. Both are false: the malformed-line law counts the reason, and a resolve after a
+   withdrawal comes back up to zero. The claims were corrected before the commit.
+
+**Deliberately not done.** The review's nits, for the person to choose:
+- The grouping law could assert the equality outright, since both moves are refused or both
+  equal; it guards with `is_none_or`.
+- `LACKS` is a positional table, as `BREAKS` is.
+- `CAP` restates the amount cap in units, and `any_amount` repeats the edges of `EDGE_MONEY`.
+- The record says an `i128` in units is "exact without a bound"; it overflows near 1.7 × 10^34.
+- `docs/testing.md`'s order of work reads as if equivalence or the benchmark gate suffices. The
+  roadmap asks for equivalence on every stage, plus the stage's own gate.
+- The overview credits the amount cap with keeping balances exact. The bound does that now; the
+  cap keeps runs off the bound.
+- The archive ticked the closed plan's last two items, by precedent, and prompt history 0008's
+  narrative still says the plan is kept in `tasks/todo.md`.
+
+The audit's nits stay as they were; the person chose the should-fix findings only. No lesson: the
+person corrected nothing.

@@ -7,7 +7,7 @@ mirrors production, and any regex. It then resolved the audit's should-fix findi
 testing strategy into `docs/`, and closed the nits the audit and the branch's review left open.
 It started from `main` at `9e4fe53`.
 
-**Outcome:** `fix/test-audit-findings` holds forty commits on `9e4fe53`, unpushed:
+**Outcome:** `fix/test-audit-findings` holds forty-one commits on `9e4fe53`:
 - two plans of record: the audit fixes', closed and kept as
   [tasks/test-audit-fixes-plan.md](../../tasks/test-audit-fixes-plan.md), and the nits',
   [tasks/todo.md](../../tasks/todo.md). The model-free tests' closed plan is kept as
@@ -112,3 +112,10 @@ The plan ran to its end:
 
 A second review, of this plan's commits only, found no blocker. Its two should-fixes landed in new
 commits, and its one nit is listed for the person in the plan's Review.
+
+### 8. Close the session
+> ok now lets close up this session: save history, push branch to remote + merge squash commit to
+> main, then push main
+
+Recorded the session as this entry and committed it, ahead of the landing the prompt asks for: the
+branch pushed with its every commit, then one squash commit on `main`, pushed in turn.

@@ -165,6 +165,7 @@ For more information, try '--help'.
 ";
 
 /// The error when the input cannot be read.
+#[cfg(unix)]
 const UNREADABLE: &str = "error: the input cannot be read\n";
 
 /// The error when the header lacks `type`, `client` or `tx`.
@@ -359,6 +360,7 @@ fn a_missing_input_cannot_be_opened() {
     assert!(stderr.starts_with(&format!("error: cannot open {}: ", path.display())), "{stderr}");
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unreadable_input_stops_the_run_with_no_table() {
     let directory = scratch().expect("the scratch directory exists");

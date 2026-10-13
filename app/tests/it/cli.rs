@@ -15,9 +15,6 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use app::csv_io::SinkError;
-use engine::run::SourceError;
-
 /// The overview, whose worked example is the contract's own.
 const OVERVIEW: &str = include_str!("../../../docs/overview.md");
 
@@ -166,6 +163,16 @@ Usage: cthulhu <input.csv>
 
 For more information, try '--help'.
 ";
+
+/// The error when the input cannot be read.
+const UNREADABLE: &str = "error: the input cannot be read\n";
+
+/// The error when the header lacks `type`, `client` or `tx`.
+const INCOMPLETE_HEADER: &str = "error: the header lacks type, client or tx\n";
+
+/// The error when the table cannot be written.
+#[cfg(unix)]
+const UNWRITABLE: &str = "error: the output cannot be written\n";
 
 /// Runs the binary with no arguments, under `name` as its `argv[0]`. A hard link to the binary,
 /// made while other tests ran it, got those runs killed with SIGKILL on macOS: the name changes
@@ -358,10 +365,7 @@ fn an_unreadable_input_stops_the_run_with_no_table() {
     let output = cthulhu(&[&directory]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(4));
     assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        format!("error: {}\n", SourceError::Unreadable)
-    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), UNREADABLE);
 }
 
 #[test]
@@ -373,10 +377,7 @@ fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
         let output = cthulhu(&[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(4));
         assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            format!("error: {}\n", SourceError::IncompleteHeader)
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), INCOMPLETE_HEADER);
     }
 }
 
@@ -390,10 +391,7 @@ fn a_table_that_cannot_be_written_is_a_write_failure() {
         let stdout = unwritable().expect("an unwritable stream opens");
         let output = cthulhu_into(stdout, &[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(5));
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            format!("error: {}\n", SinkError::Unwritable)
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), UNWRITABLE);
     }
 }
 

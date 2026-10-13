@@ -128,34 +128,34 @@ fn prop_any_amount_doubled_32_times_is_a_balance() {
     }
 }
 
-/// One step a balance takes: doubled, or `units` moved one way.
+/// One step a balance takes: doubled, or `units` of 0.0001 moved one way.
 #[derive(Debug, Clone, Copy)]
 enum Step {
     Double,
-    Move(u64, Move),
+    Move { units: u64, way: Move },
 }
 
 /// Any step, three in four a doubling, so that balances reach the largest a balance can be.
 fn any_step() -> impl Strategy<Value = Step> {
     let any_move = (any_amount(), select(&[Move::Credit, Move::Debit]))
-        .prop_map(|(units, way)| Step::Move(units, way));
+        .prop_map(|(units, way)| Step::Move { units, way });
     prop_oneof![3 => Just(Step::Double), 1 => any_move]
 }
 
-/// The balances `steps` reach from `units` as a balance, the start first, up to the first step
+/// The balances `steps` reach from `start` units of 0.0001, the start first, up to the first step
 /// refused.
-fn reached(units: u64, steps: &[Step]) -> Vec<Balance> {
-    let Some(start) = balance(units) else {
+fn reached(start: u64, steps: &[Step]) -> Vec<Balance> {
+    let Some(first) = balance(start) else {
         return Vec::new();
     };
-    let next = steps.iter().scan(start, |now, &step| {
+    let next = steps.iter().scan(first, |now, &step| {
         *now = match step {
             Step::Double => now.checked_add(*now),
-            Step::Move(amount, way) => moved(*now, amount, way),
+            Step::Move { units, way } => moved(*now, units, way),
         }?;
         Some(*now)
     });
-    iter::once(start).chain(next).collect()
+    iter::once(first).chain(next).collect()
 }
 
 /// Whether `text` writes a balance with four decimals: an optional minus, digits, a point and four

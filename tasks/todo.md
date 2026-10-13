@@ -98,7 +98,7 @@ two new laws and on nothing else.
       `test(domain): hold 2^32 of any amount in a balance`.
 - [x] **3.** Red: the other two balance laws. Commit
       `test(domain): print and group balances exactly up to their bound`.
-- [ ] **4.** Green: the bound in `Balance`. Commit
+- [x] **4.** Green: the bound in `Balance`. Commit
       `fix(domain): refuse a balance past the range where four decimals are exact`.
 - [ ] **5.** The amount round trip prints through `Balance`; `Display for Amount` is deleted. Commit
       `refactor(domain): print amounts only as balances`.

@@ -80,22 +80,31 @@ impl fmt::Display for Amount {
 }
 
 /// A signed amount of money: an account's available, held or total funds. Exact at four decimal
-/// places below 7.9 × 10^24; past that bound, addition and subtraction round.
+/// places, since its arithmetic refuses a result past the largest balance, either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Balance(Decimal);
+
+/// The largest balance, and the size of the most negative one: (2^96 − 1) × 10^−4, the most a
+/// `Decimal` holds at four decimal places.
+const LARGEST: Decimal = Decimal::from_parts(u32::MAX, u32::MAX, u32::MAX, false, 4);
 
 impl Balance {
     /// No money.
     pub const ZERO: Self = Self(Decimal::ZERO);
 
-    /// The sum, or `None` when it overflows.
+    /// The sum, or `None` when it lies past the largest balance, either way.
     pub fn checked_add(self, other: Self) -> Option<Self> {
-        self.0.checked_add(other.0).map(Self)
+        self.0.checked_add(other.0).and_then(Self::bounded)
     }
 
-    /// The difference, or `None` when it overflows.
+    /// The difference, or `None` when it lies past the largest balance, either way.
     pub fn checked_sub(self, other: Self) -> Option<Self> {
-        self.0.checked_sub(other.0).map(Self)
+        self.0.checked_sub(other.0).and_then(Self::bounded)
+    }
+
+    /// `value` as a balance, or `None` when it lies past the largest balance, either way.
+    fn bounded(value: Decimal) -> Option<Self> {
+        (value.abs() <= LARGEST).then_some(Self(value))
     }
 }
 

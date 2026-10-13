@@ -1,12 +1,15 @@
 //! Laws of the domain's money: any spelling of an amount reads as its value, text an amount refuses
-//! says why, moves then their sum back print zero, from above or below, at any scales, and a
-//! balance holds 2^32 of any amount.
+//! says why, and moves then their sum back print zero, from above or below, at any scales. Every
+//! balance that doublings, credits and debits reach prints with four decimals and adds up the same
+//! in any grouping, and a balance holds 2^32 of any amount.
+
+use std::iter;
 
 use engine::domain::{Amount, AmountError, Balance};
 use proptest::collection::vec;
 use proptest::prop_oneof;
 use proptest::sample::select;
-use proptest::strategy::Strategy;
+use proptest::strategy::{Just, Strategy};
 
 use crate::support::{self, input};
 
@@ -115,6 +118,92 @@ fn prop_any_amount_doubled_32_times_is_a_balance() {
             balance(units)
                 .and_then(|start| (0..32).try_fold(start, |sum, _| sum.checked_add(sum)))
                 .is_some()
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+/// One step a balance takes: doubled, or `units` moved one way.
+#[derive(Debug, Clone, Copy)]
+enum Step {
+    Double,
+    Move(u64, Move),
+}
+
+/// Any step, three in four a doubling, so that balances reach the largest a balance can be.
+fn any_step() -> impl Strategy<Value = Step> {
+    let any_move = (any_amount(), select(&[Move::Credit, Move::Debit]))
+        .prop_map(|(units, way)| Step::Move(units, way));
+    prop_oneof![3 => Just(Step::Double), 1 => any_move]
+}
+
+/// The balances `steps` reach from `units` as a balance, the start first, up to the first step
+/// refused.
+fn reached(units: u64, steps: &[Step]) -> Vec<Balance> {
+    let Some(start) = balance(units) else {
+        return Vec::new();
+    };
+    let next = steps.iter().scan(start, |now, &step| {
+        *now = match step {
+            Step::Double => now.checked_add(*now),
+            Step::Move(amount, way) => moved(*now, amount, way),
+        }?;
+        Some(*now)
+    });
+    iter::once(start).chain(next).collect()
+}
+
+/// Whether `text` writes a balance with four decimals: an optional minus, digits, a point and four
+/// digits.
+fn four_decimals(text: &str) -> bool {
+    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    text.strip_prefix('-')
+        .unwrap_or(text)
+        .split_once('.')
+        .is_some_and(|(whole, fraction)| digits(whole) && digits(fraction) && fraction.len() == 4)
+}
+
+#[test]
+fn prop_every_balance_prints_with_four_decimals() {
+    let law = support::for_all(
+        "every balance that doublings, credits and debits reach prints with four decimals",
+        (any_amount(), vec(any_step(), 0..=64)),
+        |(units, steps)| {
+            reached(*units, steps).iter().all(|balance| four_decimals(&balance.to_string()))
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+/// Any part of an amount, as units of 0.0001: at most half the largest, so that two parts sum to an
+/// amount.
+fn any_part() -> impl Strategy<Value = u64> {
+    any_amount().prop_map(|units| (units / 2).max(1))
+}
+
+#[test]
+fn prop_moves_add_up_the_same_in_any_grouping() {
+    let law = support::for_all(
+        "a balance moved by two amounts in turn equals it moved by their sum, wherever both moves \
+         are accepted",
+        (
+            any_amount(),
+            vec(any_step(), 0..=64),
+            any_part(),
+            any_part(),
+            select(&[Move::Credit, Move::Debit]),
+        ),
+        |(units, steps, first, second, way)| {
+            reached(*units, steps).last().is_none_or(|&now| {
+                let in_turn =
+                    moved(now, *first, *way).and_then(|after| moved(after, *second, *way));
+                let at_once = moved(now, first + second, *way);
+                in_turn.zip(at_once).is_none_or(|(left, right)| left == right)
+            })
         },
     );
     if let Err(failure) = law {

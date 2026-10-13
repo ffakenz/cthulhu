@@ -96,7 +96,7 @@ two new laws and on nothing else.
       `docs(design): record exact decimal amounts and balances with four places`.
 - [x] **2.** `prop_any_amount_doubled_32_times_is_a_balance`. Commit
       `test(domain): hold 2^32 of any amount in a balance`.
-- [ ] **3.** Red: the other two balance laws. Commit
+- [x] **3.** Red: the other two balance laws. Commit
       `test(domain): print and group balances exactly up to their bound`.
 - [ ] **4.** Green: the bound in `Balance`. Commit
       `fix(domain): refuse a balance past the range where four decimals are exact`.

@@ -41,7 +41,9 @@ const SAMPLE_REPORT: &str = "\
 1 rejected: the deposit is not disputed
 ";
 
-/// Every rejection reason but overflow, and every malformed kind, a malformed row first.
+/// Every rejection reason but overflow, and every malformed kind, a malformed row first. The locked
+/// client 2 then repeats a tx id and withdraws more than it has: each counts under the first check
+/// it fails.
 const REJECTED_AND_MALFORMED: &str = "\
 type, client, tx, amount
 deposit, 3, 13, 0
@@ -57,6 +59,8 @@ deposit, 2, 4, 1.5
 dispute, 2, 4,
 chargeback, 2, 4,
 deposit, 2, 5, 1.0
+deposit, 2, 4, 1.0
+withdrawal, 2, 14, 5.0
 Deposit, 3, 6, 1.0
 deposit, 70000, 7, 1.0
 deposit, 3, 8, 1.0, extra
@@ -75,8 +79,8 @@ client,available,held,total,locked
 
 /// The report for `REJECTED_AND_MALFORMED`.
 const REJECTED_AND_MALFORMED_REPORT: &str = "\
-1 rejected: the tx id was used before
-1 rejected: the account is locked
+2 rejected: the tx id was used before
+2 rejected: the account is locked
 1 rejected: the amount is above available
 1 rejected: no such deposit for this client
 1 rejected: the deposit is already disputed

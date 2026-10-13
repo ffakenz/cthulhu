@@ -64,11 +64,13 @@ order listed; the first that fails names the reason.
 | `chargeback` | no such deposit for this client: `UnknownDeposit`; deposit `Settled`: `NotDisputed` | `ChargedBack` |
 
 Dispute commands apply on locked accounts too. An arithmetic overflow would reject a command as
-`Overflow`; the amount cap keeps every balance exact, so it never occurs.
+`Overflow`: a balance's arithmetic refuses a result past the largest balance, about 7.9 × 10^24
+either way, so every balance stays exact. An overflow never occurs, since the amount cap keeps
+every run below that bound.
 
 ## Input
 
-*Rows parsed into commands at the boundary*, *Exact decimal amounts with four places*.
+*Rows parsed into commands at the boundary*, *Exact decimal amounts and balances with four places*.
 
 - A header naming `type`, `client`, `tx` and optionally `amount`, in any order; whitespace around
   fields is ignored.
@@ -149,7 +151,8 @@ accounts.
 
 Every runtime keeps these. No test computes what a run should give: the laws compare runs of the
 engine with each other, after any generated input, and fixtures through the binary pin the
-numbers (*Correctness defined by equations between runs*).
+numbers (*Correctness defined by equations between runs*). `docs/testing.md` says which level of
+tests checks what.
 
 1. `held` equals the sum of the client's `Disputed` deposits, and is never negative.
 2. `total` equals deposited minus withdrawn minus charged back.

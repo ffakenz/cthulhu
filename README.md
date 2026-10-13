@@ -69,6 +69,8 @@ streams and the exit status; [docs/overview.md](docs/overview.md) gives the form
 - [docs/patterns.md](docs/patterns.md) — the patterns the architecture is built from, the decider
   first.
 - [docs/design/](docs/design/README.md) — the design records: how the engine treats its input.
+- [docs/testing.md](docs/testing.md) — the levels of tests, how they relate, and where a new check
+  goes.
 - [docs/roadmap.md](docs/roadmap.md) — the benchmark-gated stages the engine grows through.
 
 ## Layout
@@ -99,6 +101,7 @@ streams and the exit status; [docs/overview.md](docs/overview.md) gives the form
 │   ├── overview.md       what the engine does
 │   ├── architecture.md   a picture of the architecture decisions
 │   ├── patterns.md       the patterns the architecture is built from
+│   ├── testing.md        the levels of tests and how they relate
 │   ├── roadmap.md        the stages ahead
 │   ├── adr/              architecture decision records and their template
 │   ├── design/           design records: how the engine treats its input

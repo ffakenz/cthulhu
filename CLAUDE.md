@@ -56,6 +56,7 @@ cthulhu/
 │   ├── overview.md       what the engine does, and the decisions behind it
 │   ├── architecture.md   a picture of the architecture decisions
 │   ├── patterns.md       the patterns the architecture is built from
+│   ├── testing.md        the levels of tests, how they relate, where a new check goes
 │   ├── roadmap.md        the benchmark-gated stages ahead
 │   ├── adr/              architecture decision records, their index and template
 │   ├── design/           design records: how the engine treats its input
@@ -193,6 +194,7 @@ See `.claude/skills/review-and-planning` for the ordering rule and the legitimat
 - No test re-implements the engine: a law compares runs of the engine with each other, and a
   fixture holds an output computed by hand.
 - A property test is named `prop_<law>` (`rust-properties`).
+- A new check goes at the lowest level of tests that can see what it pins: `docs/testing.md`.
 
 ## Comments
 
@@ -232,7 +234,8 @@ external brief or specification: refer to it by a neutral name only.
 - `tasks/todo.md` — the plan of record for the current piece of work: checkable items, and a
   Review section when it closes.
 - `tasks/<name>-plan.md` — a closed plan, kept verbatim before the next piece of work replaces
-  `todo.md`; every reference that named it as `todo.md`, quoted prompts aside, names this file.
+  `todo.md`, but for ticking the items done after its Review, such as the prompt history; every
+  reference that named it as `todo.md`, quoted prompts aside, names this file.
 - `tasks/<ticket>.md` — one ticket, copied from `tasks/TEMPLATE.md`.
 - `tasks/lessons.md` — an entry for each correction, appended when the work closes.
 - `docs/prompts/NNNN-kebab-case-title.md` — one prompt history per working session, written

@@ -28,7 +28,7 @@ impl Account {
         self.held
     }
 
-    /// Available plus held, or `None` when the sum overflows.
+    /// Available plus held, or `None` when the sum passes the largest balance, either way.
     pub fn total(&self) -> Option<Balance> {
         self.available.checked_add(self.held)
     }

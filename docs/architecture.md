@@ -135,4 +135,4 @@ does not build.
   nothing reads the clock or hash order.
 - Verification follows *Correctness defined by equations between runs*: the laws in
   `docs/overview.md`, checked by comparing runs of the engine with each other, and fixtures through
-  the binary in `app/tests/it`.
+  the binary in `app/tests/it`. `docs/testing.md` pictures the levels of tests.

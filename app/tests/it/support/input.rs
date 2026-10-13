@@ -39,9 +39,14 @@ const EDGE_MONEY: [Money; 3] = [
 ];
 
 impl Money {
-    /// The value as an amount prints it: four decimals.
+    /// The value as a balance prints it: four decimals.
     pub(crate) fn text(self) -> String {
         format!("{}.{:04}", self.whole, self.fraction)
+    }
+
+    /// The value in units of 0.0001.
+    pub(crate) fn units(self) -> u64 {
+        self.whole * 10_000 + u64::from(self.fraction)
     }
 
     /// The value after `leading` zeros, with `trailing` zeros after its last significant decimal,
@@ -265,10 +270,35 @@ pub(crate) fn any_layout() -> impl Strategy<Value = Layout> {
     )
 }
 
+/// How a header lacks one of `type`, `client` and `tx`: the `column` is left out, or named
+/// `instead` in another case or with a letter more.
+#[derive(Debug, Clone, Copy)]
+struct Lack {
+    column: &'static str,
+    instead: Option<&'static str>,
+}
+
+/// Every way a header lacks one of `type`, `client` and `tx`.
+const LACKS: [Lack; 9] = [
+    Lack { column: "type", instead: None },
+    Lack { column: "type", instead: Some("Type") },
+    Lack { column: "type", instead: Some("types") },
+    Lack { column: "client", instead: None },
+    Lack { column: "client", instead: Some("CLIENT") },
+    Lack { column: "client", instead: Some("clients") },
+    Lack { column: "tx", instead: None },
+    Lack { column: "tx", instead: Some("tX") },
+    Lack { column: "tx", instead: Some("txs") },
+];
+
 /// Any layout whose header lacks one of `type`, `client` and `tx`.
 pub(crate) fn any_incomplete_layout() -> impl Strategy<Value = Layout> {
-    (any_layout(), select(&["type", "client", "tx"])).prop_map(|(mut layout, missing)| {
-        layout.columns.retain(|&column| column != missing);
+    (any_layout(), select(&LACKS)).prop_map(|(mut layout, lack)| {
+        layout.columns = layout
+            .columns
+            .into_iter()
+            .filter_map(|column| if column == lack.column { lack.instead } else { Some(column) })
+            .collect();
         layout
     })
 }
@@ -330,6 +360,9 @@ pub(crate) enum Flaw {
     NoAmount,
     /// A deposit or a withdrawal whose amount is refused, and why.
     Amount(String, AmountError),
+    /// A deposit or a withdrawal whose amount is quoted after a space, so its quotes read as part of
+    /// it.
+    LateQuote,
     /// A field more than the header names.
     Extra,
     /// A line that stops before its tx id.
@@ -347,6 +380,7 @@ impl Flaw {
             }
             Self::NoAmount => RowError::MissingAmount,
             Self::Amount(_, why) => RowError::InvalidAmount(*why),
+            Self::LateQuote => RowError::InvalidAmount(AmountError::Malformed),
             Self::Extra => RowError::TooManyFields,
         }
     }
@@ -371,9 +405,11 @@ fn zero(whole: usize, decimals: usize) -> String {
 
 /// Digits an amount refuses, with why: zero, more than four decimals, or 10^15 or more. More than
 /// four decimals is drawn on whole parts of any size, since that refusal comes before 10^15 or
-/// more.
+/// more. A whole part of 10^15 or more is at an edge one draw in four: 10^15 itself, or the
+/// largest.
 fn any_out_of_bounds() -> impl Strategy<Value = (String, AmountError)> {
     let any_whole = prop_oneof![0..TOO_LARGE, TOO_LARGE..=u64::MAX];
+    let any_too_large = prop_oneof![1 => select(&[TOO_LARGE, u64::MAX]), 3 => TOO_LARGE..=u64::MAX];
     prop_oneof![
         (1..=3_usize, 0..=5_usize)
             .prop_map(|(whole, decimals)| (zero(whole, decimals), AmountError::Zero)),
@@ -381,7 +417,7 @@ fn any_out_of_bounds() -> impl Strategy<Value = (String, AmountError)> {
             format!("{whole}.{fraction:04}{digit}"),
             AmountError::TooPrecise
         )),
-        (TOO_LARGE..=u64::MAX, 0..=9_999_u16).prop_map(|(whole, fraction)| (
+        (any_too_large, 0..=9_999_u16).prop_map(|(whole, fraction)| (
             format!("{whole}.{fraction:04}"),
             AmountError::TooLarge
         )),
@@ -415,6 +451,7 @@ fn any_flaw() -> impl Strategy<Value = Flaw> {
         prop_oneof![not_id, above_u32].prop_map(Flaw::Tx),
         Just(Flaw::NoAmount),
         any_refused_amount().prop_map(|(text, why)| Flaw::Amount(text, why)),
+        Just(Flaw::LateQuote),
         Just(Flaw::Extra),
         Just(Flaw::Short),
         Just(Flaw::NotUtf8),
@@ -429,7 +466,7 @@ pub(crate) fn any_malformed(
 ) -> impl Strategy<Value = (Line, Flaw)> {
     (any_line(clients, txs), any_flaw(), select(&MOVERS)).prop_map(|(line, flaw, mover)| {
         let kind = match &flaw {
-            Flaw::NoAmount | Flaw::Amount(..) => mover,
+            Flaw::NoAmount | Flaw::Amount(..) | Flaw::LateQuote => mover,
             Flaw::Kind(_)
             | Flaw::Client(_)
             | Flaw::Tx(_)
@@ -450,6 +487,7 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
         Flaw::Tx(id) => format!("{kind},{client},{id},{amount}\n"),
         Flaw::NoAmount => format!("{kind},{client},{tx},\n"),
         Flaw::Amount(refused, _) => format!("{kind},{client},{tx},{refused}\n"),
+        Flaw::LateQuote => format!("{kind},{client},{tx}, \"{amount}\"\n"),
         Flaw::Extra => format!("{kind},{client},{tx},{amount},x\n"),
         Flaw::Short => format!("{kind},{client}\n"),
         Flaw::NotUtf8 => format!("{kind},{client},{tx},{amount}\n"),
@@ -461,7 +499,72 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
         | Flaw::Tx(_)
         | Flaw::NoAmount
         | Flaw::Amount(..)
+        | Flaw::LateQuote
         | Flaw::Extra
         | Flaw::Short => text.into_bytes(),
     }
+}
+
+/// The columns a line's fields are read from.
+const COLUMNS: [&str; 4] = ["type", "client", "tx", "amount"];
+
+/// A line's plainest spelling: no padding, ids in decimal, each amount at its shortest, an empty
+/// amount for a dispute command, and a `\n` end with no blank line before it.
+const PLAIN: Spelling = Spelling {
+    wraps: [Wrap::Padded("", ""); 5],
+    client: Id::Decimal,
+    tx: Id::Decimal,
+    zeros: (0, 0),
+    stray: Stray::Empty,
+    end: "\n",
+    blank: false,
+};
+
+/// How a header misfits the lines under it, so that each is malformed.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Misfit {
+    /// The header names this one of `type`, `client`, `tx` and `amount` twice, and each line has a
+    /// field for each name.
+    Twice(&'static str),
+    /// The header ends in a column besides the four, and each line stops before it.
+    Unfinished,
+    /// The header names no `amount`, and each line is this deposit or withdrawal.
+    NoAmount(&'static str),
+}
+
+impl Misfit {
+    /// The kind the report counts each line under this header as.
+    pub(crate) fn kind(self) -> RowError {
+        match self {
+            Self::Twice(_) | Self::Unfinished => RowError::Unreadable,
+            Self::NoAmount(_) => RowError::MissingAmount,
+        }
+    }
+
+    /// The header, then `lines` under it in the plainest spelling.
+    pub(crate) fn text(self, lines: &[Line]) -> String {
+        let (named, read, kind) = match self {
+            Self::Twice(column) => {
+                let twice = [COLUMNS.as_slice(), &[column]].concat();
+                (twice.clone(), twice, None)
+            }
+            Self::Unfinished => ([COLUMNS.as_slice(), &["note"]].concat(), COLUMNS.to_vec(), None),
+            Self::NoAmount(mover) => {
+                (vec!["type", "client", "tx"], vec!["type", "client", "tx"], Some(mover))
+            }
+        };
+        lines.iter().fold(named.join(",") + "\n", |text, &line| {
+            let written = Line { kind: kind.unwrap_or(line.kind), ..line };
+            text + &fields(written, &PLAIN, &read) + "\n"
+        })
+    }
+}
+
+/// Any misfit, its column named twice or its deposit or withdrawal drawn among all.
+pub(crate) fn any_misfit() -> impl Strategy<Value = Misfit> {
+    prop_oneof![
+        select(&COLUMNS).prop_map(Misfit::Twice),
+        Just(Misfit::Unfinished),
+        select(&MOVERS).prop_map(Misfit::NoAmount),
+    ]
 }

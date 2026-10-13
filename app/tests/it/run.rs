@@ -1,13 +1,15 @@
 //! The runtime through the CSV source, over fresh in-memory stores. On valid lines, clients run
 //! independently, suffixes the rules make equivalent leave the same accounts after any lines, and
-//! any spelling reads as the canonical one. A malformed line changes nothing but its count, and a
-//! header lacking a column or a source error stops the run.
+//! any spelling reads as the canonical one. Malformed lines change nothing but their counts, lines
+//! under a header that misfits them are each malformed, and a header lacking a column or a source
+//! error stops the run.
 
 use std::collections::BTreeMap;
 use std::io::{self, Read};
 use std::iter;
 
 use app::csv_io::CsvSource;
+use engine::domain::Reason;
 use engine::run::{Row, RowError, RunError, SourceError, Summary, run};
 use proptest::collection::vec;
 use proptest::strategy::Strategy;
@@ -37,10 +39,15 @@ fn prop_clients_run_independently() {
                     }
                 })
                 .collect();
-            let mut by_client = distinct.clone();
-            by_client.sort_by_key(|line| line.client);
-            support::summary(input::canonical(&distinct).as_bytes())
-                == support::summary(input::canonical(&by_client).as_bytes())
+            let mut sorted = distinct.clone();
+            sorted.sort_by_key(|line| line.client);
+            let (as_drawn, by_client) = (input::canonical(&distinct), input::canonical(&sorted));
+            assert_eq!(
+                support::summary(as_drawn.as_bytes()),
+                support::summary(by_client.as_bytes()),
+                "{as_drawn:?} and {by_client:?} differ"
+            );
+            true
         },
     );
     if let Err(failure) = law {
@@ -51,7 +58,7 @@ fn prop_clients_run_independently() {
 /// Pairs of suffixes that leave the same accounts after any lines, each under the rule it pins:
 /// `c` is the drawn client, `o` another and `F` one no line names; `a` and `b` are the drawn
 /// amounts; `X`, `Y` and `Z` are tx ids no line names.
-fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 14] {
+fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
     const F: u16 = 9;
     const X: u32 = 100;
     const Y: u32 = 101;
@@ -71,6 +78,8 @@ fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 14] {
         (format!("{deposit}resolve,{c},{X}\nchargeback,{c},{X}\n"), deposit.clone()),
         // A second dispute of a held deposit changes nothing.
         (format!("{held}dispute,{c},{X}\n"), held.clone()),
+        // A resolved deposit can be disputed again.
+        (format!("{held}resolve,{c},{X}\ndispute,{c},{X}\n"), held.clone()),
         // A chargeback takes back exactly what its deposit added, whatever the amount, and locks.
         (charged.clone(), format!("{other}dispute,{c},{Y}\nchargeback,{c},{Y}\n")),
         // A locked account refuses deposits.
@@ -136,8 +145,13 @@ fn prop_any_spelling_reads_as_the_canonical_one() {
                 .map(|(line, spelling)| (layout.fit(*line), spelling.clone()))
                 .collect();
             let lines: Vec<input::Line> = spelled.iter().map(|&(line, _)| line).collect();
-            support::summary(input::spelled(&spelled, layout).as_bytes())
-                == support::summary(input::canonical(&lines).as_bytes())
+            let (written, canonical) = (input::spelled(&spelled, layout), input::canonical(&lines));
+            assert_eq!(
+                support::summary(written.as_bytes()),
+                support::summary(canonical.as_bytes()),
+                "{written:?} and {canonical:?} differ"
+            );
+            true
         },
     );
     if let Err(failure) = law {
@@ -152,13 +166,23 @@ fn prop_a_header_lacking_type_client_or_tx_stops_the_run() {
         "a header lacking type, client or tx stops the run, whatever lines follow it",
         (vec((any_line, input::any_spelling()), 0..=4), input::any_incomplete_layout()),
         |(spelled, layout)| {
-            support::summary(input::spelled(spelled, layout).as_bytes())
-                == Err(RunError::Source(SourceError::IncompleteHeader))
+            let text = input::spelled(spelled, layout);
+            assert_eq!(
+                support::summary(text.as_bytes()),
+                Err(RunError::Source(SourceError::IncompleteHeader)),
+                "{text:?}"
+            );
+            true
         },
     );
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+/// Each reason, with how many commands `summary` rejected for it.
+fn rejected(summary: &Summary) -> BTreeMap<Reason, u64> {
+    summary.report.rejected().map(|(reason, count)| (reason, count.get())).collect()
 }
 
 /// Each kind of malformed line, with how many lines of it `summary` counts.
@@ -167,29 +191,66 @@ fn malformed(summary: &Summary) -> BTreeMap<RowError, u64> {
 }
 
 #[test]
-fn prop_a_malformed_line_changes_nothing_but_its_count() {
+fn prop_malformed_lines_change_nothing_but_their_counts() {
     let law = support::for_all(
-        "a malformed line among valid ones changes no account and no rejection, and counts once as \
-         its kind",
-        (lines(), input::any_malformed(1..=3_u16, 0..8_u32), lines()),
-        |(before, (line, flaw), after)| {
-            let valid = [before.as_slice(), after.as_slice()].concat();
-            let flawed = [
-                input::canonical(before).into_bytes(),
-                input::malformed(*line, flaw),
-                input::rows(after).into_bytes(),
-            ]
-            .concat();
-            let (Ok(with), Ok(without)) =
-                (support::summary(&flawed), support::summary(input::canonical(&valid).as_bytes()))
-            else {
-                return false;
+        "malformed lines among valid ones change no account and no rejection, and each counts once \
+         as its kind",
+        (lines(), vec((input::any_malformed(1..=3_u16, 0..8_u32), lines()), 1..=3)),
+        |(first, rest)| {
+            let valid: Vec<input::Line> =
+                first.iter().chain(rest.iter().flat_map(|(_, after)| after)).copied().collect();
+            let flawed = rest.iter().fold(
+                input::canonical(first).into_bytes(),
+                |text, ((line, flaw), after)| {
+                    [text, input::malformed(*line, flaw), input::rows(after).into_bytes()].concat()
+                },
+            );
+            let (text, clean) = (String::from_utf8_lossy(&flawed), input::canonical(&valid));
+            let (flawed_run, clean_run) =
+                (support::summary(&flawed), support::summary(clean.as_bytes()));
+            let (Ok(with), Ok(without)) = (&flawed_run, &clean_run) else {
+                panic!("{text:?} gave {flawed_run:?}, and {clean:?} gave {clean_run:?}");
             };
-            let mut counted = malformed(&without);
-            *counted.entry(flaw.kind()).or_insert(0) += 1;
-            with.accounts == without.accounts
-                && with.report.rejected().eq(without.report.rejected())
-                && malformed(&with) == counted
+            let mut counted = malformed(without);
+            for ((_, flaw), _) in rest {
+                *counted.entry(flaw.kind()).or_insert(0) += 1;
+            }
+            assert_eq!(
+                (&with.accounts, rejected(with), malformed(with)),
+                (&without.accounts, rejected(without), counted),
+                "{text:?} and {clean:?} differ in more than the flawed lines' counts"
+            );
+            true
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+#[test]
+fn prop_lines_that_misfit_their_header_are_malformed() {
+    let law = support::for_all(
+        "under a header that names a column twice, ends in a column the lines stop before, or names \
+         no amount over deposits and withdrawals, each line is malformed and opens nothing",
+        (lines(), input::any_misfit()),
+        |(drawn, misfit)| {
+            let (text, empty) = (misfit.text(drawn), input::canonical(&[]));
+            let (misfit_run, empty_run) =
+                (support::summary(text.as_bytes()), support::summary(empty.as_bytes()));
+            let (Ok(with), Ok(without)) = (&misfit_run, &empty_run) else {
+                panic!("{text:?} gave {misfit_run:?}, and {empty:?} gave {empty_run:?}");
+            };
+            let mut counted = malformed(without);
+            for _ in drawn {
+                *counted.entry(misfit.kind()).or_insert(0) += 1;
+            }
+            assert_eq!(
+                (&with.accounts, rejected(with), malformed(with)),
+                (&without.accounts, rejected(without), counted),
+                "{text:?} and {empty:?} differ in more than the lines' counts"
+            );
+            true
         },
     );
     if let Err(failure) = law {

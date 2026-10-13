@@ -1,264 +1,209 @@
-# Model-free tests — plan
+# Test audit nits — plan
 
-**Goal:** the black-box test crate checks the engine without re-implementing it. Every expected
-value is either another run of the engine or a hand-computed fixture. The crate shrinks from 3,481
-lines to about 760, and every behaviour the old laws pinned stays pinned, shown by the deliberate
-breaks they were proven on.
+**Goal:** close every nit still open from the audit of the black-box tests and from this branch's
+review:
+- a failing run law shows the inputs it ran and what they gave;
+- the engine's laws reach counts above one, and the malformed forms that no generator wrote;
+- the binary's fixtures pin every word they check;
+- the wording of a malformed row lives in one place;
+- the balance laws state all that holds, drawn from the one generator of amounts;
+- the closed plans and their references agree with the conventions.
 
-**Context:** the person asked to simplify the tests while keeping their coverage, and to remove
-the tests that mirror the code they test:
-- the reference store beside `MemoryLedger`;
-- the copies of the runtime and of the deciders in `core.rs`;
-- the naive model, with its own `Account`;
-- the strategies that track the engine's rules, and the spellings that copy the CSV adapter's.
-
-Nothing under `app/src` or `libs/` changes. The work starts from `main` at `28ab587`, on
-`feat/model-free-tests`, in a worktree of its own.
-
-The person signed off this plan as written.
+**Context:** the audit of the tests on `main` at `9e4fe53` left six nits, and the branch's review
+left four once the person had chosen three. The person asked to continue with those still open,
+and asked why `deposits` in `app/tests/it/cli.rs` writes each client's number as its tx id. The
+work continues on `fix/test-audit-findings`, which has not landed; the audit fixes' closed plan is
+kept as [tasks/test-audit-fixes-plan.md](test-audit-fixes-plan.md). The person's approval of this
+plan accepts the production refactor in decision 1, the convention in decision 8 and the second
+review in decision 9.
 
 ## Decisions
 
-1. **Equations between runs.** After any generated prefix of rows, two suffixes that the rules
-   make equivalent leave the same accounts. Both sides are runs of the engine, so no test computes
-   a balance. Random rows over tiny domains give a client any state, and fresh tx ids let a suffix
-   control its own deposit. The person chose this over step laws with expected deltas, which would
-   restate the commands table, and over fixtures alone.
-2. **The seam** is `run` over `CsvSource` and the in-memory stores. The stores' laws hold through
-   the engine's, and the binary's fixtures stay the contract.
-3. **The record:** *Correctness defined by equations between runs* supersedes *Correctness defined
-   by laws and a model*. The docs follow at the close.
-4. **Deliberately not covered:**
-   - `evolve`'s `Opened` arm, which `run` never reaches;
-   - `evolve` on footprints no run builds, where a panicking shortcut fails `make lint`;
-   - overflow, which no test reached before either.
-5. **The closed plan is kept** as `tasks/workspace-packages-plan.md`, with its last two items
-   ticked first, and prompt history 0007's link names it.
+1. **A malformed row's kind prints as its error reads.** `render_report` writes each malformed
+   kind through `RowError`'s `Display`, and the `malformation` match is deleted.
+   - The two wordings agree today, but nothing prints the `#[error]` texts, so they could drift
+     apart silently.
+   - *csv, serde, rust_decimal, thiserror, clap, proptest and rand as dependencies* names
+     `RowError` and `AmountError` among the error types whose messages `thiserror` derives. Their
+     texts stay, and the report reads them.
+   - A rejection's reason keeps its wording in `text_io`: `Reason` is not an error and has no
+     `Display`.
+   - A refactor: the binary's fixture pins every malformed kind's words, before and after.
+2. **A failing run law shows both texts and both results.** The four run laws that return a bool
+   assert instead, as the pairs law does. A failure prints the CSV text of each run and each
+   summary; the header law prints its text and the result.
+   - *Correctness defined by equations between runs* says a failing equation prints both inputs
+     and both sets of accounts. Today these four print only the generators' structs.
+   - Rejected: `for_all` taking a reason instead of a bool. Every law would change, the domain's
+     included, whose inputs already print in full.
+3. **Several malformed lines, of any kinds.** The malformed-line law inserts one to three flawed
+   lines among valid ones, each counted once as its kind, so counts above one are pinned below the
+   binary. It becomes `prop_malformed_lines_change_nothing_but_their_counts`.
+4. **The malformed forms no generator wrote**, all but the third in the overview's Input:
+   - a flaw: an amount quoted after a space keeps its quotes, so it is refused as malformed;
+   - a generator of headers that misfit the lines under them, and a law: under such a header each
+     line is malformed and no account opens:
+     - a header naming `type`, `client`, `tx` or `amount` twice: each line is unreadable;
+     - a header ending in a column besides the four, which each line stops before: unreadable;
+     - a header naming no `amount`, over deposits and withdrawals: no amount.
+
+     The lines are canonical: the misfit lies in the header, and the spellings' law already
+     covers how each field is written.
+5. **The binary's fixtures spell out what they check.**
+   - The three expected error lines built from `SourceError`'s and `SinkError`'s `Display` are
+     written out, so the binary's level pins their words.
+   - `an_unreadable_input_stops_the_run_with_no_table` runs on Unix only, as its neighbours do:
+     elsewhere, opening a directory fails before the read the test means.
+   - `deposits` draws its tx ids apart from its clients. The numbers stay the same, so every
+     deposit is still accepted, but the line no longer reads as a typo.
+6. **The balance laws state all that holds, from the one generator of amounts.**
+   - `any_amount` maps `input::any_money()` to units through a new `Money::units`; `CAP` and the
+     repeated edges go. Probe: dropping the bound still fails the printing and grouping laws, and
+     a bound at 10^20 the 32-doublings law, in 3 runs of 3 each.
+   - The grouping law asserts `in_turn == at_once`. Two moves the same way are both refused or
+     equal, since the accepted range is an interval. Probe: it holds over 20,000 cases, and a
+     per-move limit on debits fails it where today's law passes.
+   - Rejected: deriving `CAP` from `TOO_LARGE`, which keeps a second generator of the same values.
+7. **`LACKS` names its parts:** a `Lack`, with the `column` left out and the name written
+   `instead`, if any. `BREAKS` keeps its pairs, which read as the text before and after, as the
+   review allowed.
+8. **Closed plans agree with the conventions.**
+   - Prompt history 0008's narrative names `tasks/model-free-tests-plan.md`, as the conventions
+     ask of every reference but a quoted prompt.
+   - `CLAUDE.md` says a closed plan is kept verbatim but for ticking the items done after its
+     Review: the prompt history and the hand-off. The model-free tests' archive did that; the
+     archive here needs no tick.
+9. **A review of this plan's commits.** The branch's one review covered the commits before them.
+   This work changes production code and five test files, so it gets one review of its own.
 
 ## Files and interfaces
 
 | File | After the change |
 |---|---|
-| `app/tests/it/main.rs` | the modules `support`, `cli`, `domain` and `run` |
-| `app/tests/it/support.rs` | `for_all` and `Failure` as they are; `summary(text: &[u8])`: `run` over `CsvSource` and fresh in-memory stores |
-| `app/tests/it/run.rs` | the row strategy, two laws and two examples (Tests) |
-| `app/tests/it/domain.rs` | one round trip, one example and one law on money (Tests) |
-| `app/tests/it/cli.rs` | `/dev/full` replaced by a portable write failure on `unwritable()`; a non-UTF-8 header; `input(name, contents: impl AsRef<[u8]>)` |
-| deleted | `core.rs`, `memory.rs`, `csv_io.rs`, `support/generate.rs`, `support/spelling.rs`, `support/model.rs` |
+| `app/src/text_io.rs` | a malformed kind prints through `RowError`'s `Display`; `malformation` deleted |
+| `app/tests/it/run.rs` | the four bool laws assert, with both texts and both results; the malformed-line law takes up to three flawed lines; the misfit law; the module doc to match |
+| `app/tests/it/support/input.rs` | the late-quote flaw; `Misfit`, its generator and its text; `Lack`; `Money::units` |
+| `app/tests/it/domain.rs` | `any_amount` maps `any_money`, and `CAP` goes; the grouping law asserts the equality |
+| `app/tests/it/cli.rs` | three error lines written out; the directory test on Unix only; `deposits` draws its tx ids apart |
+| `docs/testing.md` | the engine's row names several malformed lines and the misfits |
+| `docs/prompts/0008-model-free-tests.md`, `docs/prompts/0009-test-audit-fixes.md` | name the closed plans |
+| `CLAUDE.md` | a closed plan's ticks |
+| `tasks/test-audit-fixes-plan.md` | the audit fixes' closed plan, verbatim |
 
 ## Tests
 
-- **Rows:** 0–16 lines of any type, by clients 1–3, on tx ids 0–7, for amounts at mixed scales up
-  to the cap.
-- `prop_clients_run_independently`: with each deposit's and withdrawal's tx id set to its row
-  index, the rows and the same rows stably sorted by client give the same summary.
-- `prop_equivalent_commands_leave_the_same_accounts`: after any rows, with client `c`, another
-  client `o`, a client `F` no row names, amounts `a` and `b` and fresh ids `X Y Z`, each pair leaves
-  the same accounts. Here `deposit` is `deposit(c,X,a)`, `held` is `deposit·dispute(c,X)` and
-  `charged` is `held·chargeback(c,X)`.
+No check here has a red: each pins behaviour that already works, or restates a law. Instead, each
+is shown to catch its break in a scratch copy, never in the repo; the results go in the Review.
 
-  | # | Left ≡ right | The rule |
-  |---|---|---|
-  | 1 | held·resolve ≡ deposit | a resolve releases what its dispute held |
-  | 2 | deposit·resolve·chargeback ≡ deposit | only a disputed deposit resolves or is charged back |
-  | 3 | held·dispute ≡ held | a deposit is disputed once at a time |
-  | 4 | charged ≡ the same with `Y` and `b` | a chargeback reverses its deposit and locks, whatever the amount |
-  | 5 | charged·deposit(c,Y,b) ≡ charged | a locked account refuses deposits |
-  | 6 | charged·withdrawal(c,Y,b) ≡ charged | … and withdrawals |
-  | 7 | charged·resolve ≡ charged | a charged-back deposit leaves history |
-  | 8 | charged·dispute ≡ charged | … |
-  | 9 | deposit(c,Y,b)·charged·dispute(c,Y) ≡ deposit(c,Y,b)·dispute(c,Y)·charged | dispute commands still apply on a locked account |
-  | 10 | withdrawal(c,X,a)·withdrawal(o,X,b)·deposit(c,X,b) ≡ withdrawal(c,X,a)·dispute(o,Z) | a tx id is spent on first sight, refused or not, for every client |
-  | 11 | deposit·dispute(o,X) ≡ deposit·dispute(o,Z) | a dispute reaches only its own client's deposits |
-  | 12 | withdrawal(c,X,a)·dispute(c,X) ≡ withdrawal(c,X,a)·dispute(c,Z) | a withdrawal is not in history |
-  | 13 | deposit(F,X,a)·withdrawal(F,Y,a) ≡ dispute(F,Z) | a withdrawal of exactly `available` is accepted |
-  | 14 | deposit(F,X,a)·dispute(F,X)·withdrawal(F,Y,a) ≡ deposit(F,X,a)·dispute(F,X) | held funds cannot be withdrawn |
-  | 15 | deposit(F,X,0)·deposit ≡ deposit | a malformed row opens no account and spends no tx id |
-
-- **A source error stops the run:** after a header, a reader that always fails, then three
-  malformed rows. The run stops on the error, having pulled exactly one item.
-- **The input as the overview spells it** reads as its canonical spelling. It carries:
-  - permuted columns, with an ignored one before `amount`;
-  - padding, a BOM, a blank line, a quoted field, CRLF, and an id spelled `0x1`;
-  - a dispute row cut before its amount, and one carrying an amount;
-  - a non-UTF-8 row.
-- `prop_amount_text_parses_back_to_its_value`: four-decimal text with edge-weighted whole parts
-  parses and prints back, except zero and 10^15 and up; a leading zero and a fifth decimal change
-  nothing.
-- **Malformed spellings:** the list in `AmountError::Malformed`'s doc, each `Malformed`.
-- `prop_credits_then_a_debit_of_their_sum_print_zero`: 2–4 credits at mixed scales, then one debit
-  of their sum, print `0.0000`.
-- `a_table_that_cannot_be_written_is_a_write_failure`: one deposit, and 300 clients, on an
-  unwritable stdout give status 5 and the sink's message.
-
-## Deviation: the person's request, after task 2
-
-The person asked for one generator per field, composed into a line, and for success and failure
-never to be checked in the same property. The generators live in `support/input.rs`:
-- **Valid fields:** type, client, tx and amount. Each draws its value from the whole domain,
-  edges weighted, and its spelling from every form the Input section of the overview admits; ids
-  also take the forms *Rows parsed into commands at the boundary* records.
-- **A valid line** composes the fields. **A file layout** composes the columns in any order, an
-  extra column, a byte-order mark, line ends and blank lines.
-- **Flaws:** a type that names no command, an id outside its type, each reason an amount is
-  refused, an extra field, a short line, a byte that is not UTF-8. **A malformed line** composes a
-  valid line with one flaw, and the flaw names the kind the line is counted as.
-
-The success properties run on valid lines only:
-- client independence;
-- the equations, without pair 15;
-- `prop_any_spelling_reads_as_the_canonical_one`;
-- `prop_any_spelling_of_an_amount_reads_as_its_value`;
-- the balance law.
-
-The failure properties run on malformed input only:
-- `prop_a_malformed_line_changes_nothing_but_its_count`, which takes over pair 15;
-- `prop_text_an_amount_refuses_says_why`;
-- the source-error example.
-
-The spelling example and the malformed-spelling example go. Task 3's breaks are run against this
-suite.
+| Check | Break it must catch |
+|---|---|
+| the report through `RowError`'s `Display` | `RowError::MissingAmount`'s message changed: the fixture fails, where today nothing does |
+| the four laws' failure output | one break per law: its failure shows both texts and both results |
+| several malformed lines | a malformed kind counted once, however often it occurs |
+| the late-quote flaw | quotes stripped from an amount's text |
+| a header naming a column twice | a header's repeated names dropped before its rows are read |
+| a header ending in a column the lines stop before | a short row padded to the header's length |
+| a header naming no amount | a deposit or a withdrawal under such a header read as a dispute |
+| `Lack` | header names compared ignoring case |
+| `any_amount` from `any_money` | the bound dropped; the bound at 10^20 |
+| the grouping law's equality | a per-move limit on debits |
+| the error lines written out | `SourceError::Unreadable`'s message changed |
 
 ## Tasks
 
-- [x] **0.** The worktree and the branch; the archive and the link; this plan. Commit
-      `docs(tasks): keep the workspace plan and plan the model-free tests`.
-- [x] **1.** The record, its index line and the superseded record's Status line. Commit
-      `docs(adr): record correctness defined by equations between runs`.
-- [x] **2.** The new suite replaces the old, with `make ci` green. These are characterisation
-      tests: the behaviour already works. Commit
-      `test(it): check the engine by equations between its own runs`.
-- [x] **3.** Law evidence, run in a scratch copy, never in the repo. Every recorded break of the
-      stage 1 and command-line plans is run against the new suite. Each must fail a test, or fail
-      `make lint` for the `.expect` break. If a break escapes, the strategy is fixed or a pair is
-      added; a law is never weakened.
-- [x] **4.** The docs:
-      - the overview's Laws, the architecture, the patterns and the roadmap;
-      - `README.md` and `CLAUDE.md`;
-      - the two skill references to the test crate.
-      Commit `docs(engine): describe the model-free tests`.
-- [x] **5.** One `code-reviewer` run on the branch. Its fixes go in new commits.
-- [x] **6.** The Review, the Law evidence and any lesson. Commit
-      `docs(tasks): close the model-free tests plan`.
-- [ ] **7.** Prompt history 0008, alone:
-      `docs(prompts): add prompt history 0008 (model-free tests)`.
-- [ ] **8.** Report what is on the branch. Landing is the person's.
+Every commit passes `make ci` and the forbidden-name check.
+
+- [x] **0.** The archive and its link; this plan. Commit
+      `docs(tasks): keep the audit fixes plan and plan the nits`.
+- [x] **1.** The report through `RowError`'s `Display`. Commit
+      `refactor(app): print a malformed row's kind as its error reads`.
+- [x] **2.** The four laws assert. Commit
+      `test(run): show both texts and both results when a run law fails`.
+- [x] **3.** Several flawed lines. Commit `test(run): count several malformed lines of any kinds`.
+- [x] **4.** The late quote. Commit `test(run): refuse an amount quoted after padding`.
+- [x] **5.** The misfits and their law. Commit
+      `test(run): find each line malformed under a header that misfits it`.
+- [x] **6.** `Lack`. Commit `refactor(run): name the column a header lacks and its stand-in`.
+- [x] **7.** `any_amount` from `any_money`. Commit
+      `test(domain): draw the balance laws' amounts from the one generator of amounts`.
+- [x] **8.** The grouping law's equality. Commit
+      `test(domain): assert that two moves equal one by their sum, refusals included`.
+- [x] **9.** The error lines written out. Commit
+      `test(cli): spell out the error lines the binary prints`.
+      Deviation: amended before the next commit, so that `UNWRITABLE` is `#[cfg(unix)]`, as its one
+      test is.
+- [x] **10.** The directory test on Unix only. Commit
+      `test(cli): run the unreadable-input test on Unix only`.
+- [x] **11.** `deposits`' tx ids. Commit
+      `refactor(cli): draw the deposits' tx ids apart from their clients`.
+- [x] **12.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
+      check. The results go in the Review.
+- [x] **13.** The engine's row in `docs/testing.md`. Commit
+      `docs(testing): name what the engine's laws reach now`.
+- [x] **14.** Prompt history 0008's narrative. Commit
+      `docs(prompts): name where the model-free tests plan is kept`.
+- [x] **15.** The convention on ticks. Commit
+      `docs(conventions): let a closed plan tick the items done after its Review`.
+- [x] **16.** One `code-reviewer` run on this plan's commits; its fixes go in new commits.
+      Deviation: no blocker. The two should-fixes landed as
+      `refactor(run): name the misfits' spelling for what it writes` and
+      `docs(tasks): give the closed plans' row the convention's exception`.
+- [x] **17.** The Review and any lesson. Commit `docs(tasks): close the nits plan`.
+- [ ] **18.** Prompt history 0009 gains this work's turns, alone:
+      `docs(prompts): add the nits to prompt history 0009`.
+- [ ] **19.** Report what is on the branch. Landing is the person's.
 
 ## Review
 
-**What the work became.** The test crate went from 3,481 lines to 1,269, and no test computes what
-a run should give:
-- `run.rs` holds the engine to equations between its runs;
-- `domain.rs` holds the laws of money;
-- `support/input.rs` holds a generator per field, composed into valid and malformed lines;
-- `cli.rs` keeps the binary's fixtures. Its write-failure test now runs everywhere, and a non-UTF-8
-  header joins the incomplete-header loop.
+**What the work became.** Nineteen commits on `537e953`, this Review's and the prompt history's
+included; the test crate went from 28 tests to 29.
+- A malformed row's kind prints through `RowError`'s `Display`, so its words live once, in the
+  error's message.
+- The four run laws that returned a bool assert: a failure prints the CSV text of both runs and
+  both results.
+- The malformed-line law takes one to three flawed lines, a new flaw quotes an amount after
+  padding, and a new law covers the three headers that misfit their lines.
+- The balance laws draw their amounts from `input::any_money()`, and the grouping law asserts the
+  equality outright.
+- The binary's fixtures spell out their error lines, the unreadable-input test is Unix-only, and
+  `deposits` draws its tx ids apart.
+- `Lack` names its parts, prompt history 0008 names its closed plan, and `CLAUDE.md` and
+  `tasks/README.md` let a closed plan tick the items done after its Review.
+
+**Evidence.** Each break ran in the scratch worktree, at `61ecf01` and, where the check is new, at
+`537e953`, the branch before this plan.
+
+| Break | Fails at `61ecf01` | At `537e953` |
+|---|---|---|
+| `RowError::MissingAmount`'s message changed | the rejected-and-malformed fixture | escaped every test |
+| `SourceError::Unreadable`'s message changed | the unreadable-input fixture | escaped every test |
+| a malformed kind counted once, however often it occurs | the malformed-lines law, the misfit law and the fixture | the fixture only |
+| quotes stripped from an amount's text | the malformed-lines law | escaped every test |
+| a header's repeated names dropped before its rows are read | the misfit law | escaped every test |
+| a short row padded to the header's length | the misfit law | escaped every test |
+| a deposit or a withdrawal under a header with no amount read as a dispute | the misfit law | escaped every test |
+| header names compared ignoring case | the incomplete-header law | not rerun: caught before too |
+| the bound dropped, in 3 runs | the printing and grouping laws and the largest-balance example, in each | not rerun |
+| the bound at 10^20, in 3 runs | the 32-doublings law and the largest-balance example, in each | not rerun |
+| a per-move limit on debits | the grouping law, the largest-balance example and the pairs law | the example and the pairs law; the grouping law passed |
+
+Each of the four laws that now assert was failed once more, by the report keeping only its last
+rejection, fields left untrimmed, extra fields read, and the header compared ignoring case. Each
+failure printed the CSV texts and both results. The spelling law, for one, printed
+`"note,amount,type,client,tx\nx,0.0001,deposit,0, 0"` against
+`"type,client,tx,amount\ndeposit,0,0,0.0001\n"`, with both summaries.
 
 **What the framing got wrong.**
-- The first suite traded the spelling domain for one example, the one the recorded breaks
-  happened to need, and two of its properties checked success and failure together. The person
-  asked for one generator per field, composed into a line, and for failure to have generators and
-  properties of its own. The deviation above records the change.
-- Coverage was measured against the recorded breaks alone. The branch review found five
-  behaviours the old generators pinned and no recorded break exercised:
-  - a dispute's refused amount;
-  - a header without `amount`;
-  - a header lacking `type` or `client`;
-  - zero reached from below;
-  - the order of the amount refusals.
+1. Decision 4 called the misfits' lines canonical. Their spelling writes each amount at its
+   shortest, where `input::canonical` writes four decimals; the review had it named plain.
+2. Decision 8 changed the convention in `CLAUDE.md` alone. `tasks/README.md` states it too, and
+   the review caught the two disagreeing.
+3. Task 9 defined `UNWRITABLE` on every target, while its one test runs on Unix only. The commit
+   was amended before the next one; no target but the host's is installed, so no build off Unix
+   checked it.
 
-  Each now has generated coverage, shown failing on the reviewer's break, and the lesson of this
-  date turns them into rules.
-- `main` moved twice while the plan waited for approval: the workspace split landed, and so did the
-  conventions for lean plans and one review per branch. The plan was revised for both before any
-  work began.
+**Deliberately not done.** The review's one nit, for the person to choose: the grouping law's
+label, "or both moves are refused", can be read as the two amounts' moves. "Refusals included",
+the commit's wording, reads one way only.
 
-**What was narrower or wider than expected.**
-- Wider: the stores' laws are now held through the engine's laws, as *Libraries and an app as
-  packages that depend inward* already says of `engine` and `store`. A malformed line among valid
-  ones also catches seven of the recorded breaks.
-- Narrower: no production code changed, and the `.expect` break is caught by `make lint`, not by a
-  test.
-
-**Deliberately not done.**
-- `evolve`'s `Opened` arm stays unchecked: `run` never produces `Opened`.
-- Overflow stays unchecked, as before.
-- A header that names a column twice is left to no test, as before.
-- The review's nits are left to the person.
-
-**Law evidence.** Every recorded break from the Law evidence tables of
-`tasks/stage-1-proptest-plan.md` and `tasks/stage-1-cli-plan.md`, and the review's five, was run in
-a scratch copy, never the repo. The pass ran against the suite at `5f6d1e7`. The two test commits
-after it, a named direction and refused amounts drawn from their generator, were run again on the
-two breaks they touch.
-- **Results:** of the 45 breaks, 43 fail a test on the first run, one fails `make lint`, and one
-  is unreachable.
-- **Single-law catches:** each break that a single randomized law catches failed 20 of 20 runs of
-  that law alone, with fresh seeds.
-- **The review's five:** all five pass the suite as it stood before the review.
-- **Restores:** each restored file was given a fresh mtime, since cargo reuses a build when a
-  restored file is older than it.
-
-The table's test codes:
-- `EQ`: `prop_equivalent_commands_leave_the_same_accounts`, with its pair number;
-- `IND`: `prop_clients_run_independently`;
-- `SPELL`: `prop_any_spelling_reads_as_the_canonical_one`;
-- `MAL`: `prop_a_malformed_line_changes_nothing_but_its_count`;
-- `INC`: `prop_a_header_lacking_type_client_or_tx_stops_the_run`;
-- `SRC`: the source-error example;
-- `AMT`, `REF`, `ZERO`: the money laws;
-- the `cli` fixtures:
-  - `OVW`: the overview example;
-  - `SMP`: the sample input;
-  - `RM`: every rejection and malformed kind;
-  - `HDR`: the incomplete headers;
-  - `UNRD`: the unreadable input;
-  - `TBLW` and `RPTW`: the table and report write failures.
-
-| Break | Caught by |
-|---|---|
-| the size check refuses fifteen whole digits | AMT, EQ |
-| `from_str` strips a leading `+` | REF, MAL |
-| `from_str` reads its first byte by index | REF |
-| `checked_sub` negates its difference | ZERO, OVW, SMP, RM, RPTW |
-| `checked_sub` negates a zero reached across two scales | ZERO |
-| a static flag refuses every other client command | EQ, IND, SPELL, MAL, OVW, SMP, RM, RPTW |
-| `Released` reads the deposit with `.expect` | `make lint` |
-| `Released` leaves `held` | EQ 1, SMP, RM, RPTW |
-| `ChargedBack` leaves `held` | EQ 4, OVW, SMP, RM, RPTW |
-| `ChargedBack` keeps the lock | EQ 5, OVW, SMP, RM, RPTW |
-| the funds check compares with `total` | EQ 14 |
-| a resolve of a settled deposit releases it | EQ 2, SMP |
-| the funds check refuses exactly `available` | EQ 13, OVW |
-| the lock is checked for deposits only | EQ 6 |
-| `open` locks the account | OVW, SMP, RM, RPTW |
-| `Opened` makes `open()` of a loaded footprint | none: `run` never produces `Opened` |
-| withdrawals skip intake | EQ 10 |
-| a refusal at a loaded footprint commits `open()` | EQ 2, OVW, SMP, RM, RPTW |
-| malformed rows are skipped uncounted | MAL, RM |
-| `run` skips an `Err` like a malformed row | SRC, UNRD, HDR, INC |
-| the source is collected whole before the run | SRC |
-| rejections kept as one entry per refused row | IND, SMP, RM |
-| a static run counter in the first rejection count | IND, SPELL, MAL |
-| a footprint cache keyed by the tx id alone, across runs | EQ 11, IND, SPELL, MAL |
-| the same cache, reset at each run | EQ 11, IND |
-| `commit` keeps a charged-back deposit | EQ 7 |
-| `commit` skips the account when it writes a deposit | EQ 1, OVW, SMP, RM, RPTW |
-| `snapshot` leaves out the accounts at zero | OVW, RM, RPTW |
-| `sight` forgets an id it answers `Repeat` for | EQ 10 |
-| fields are not trimmed | SPELL, OVW, SMP, RM, RPTW |
-| a row must have the header's length | SPELL, MAL, EQ, RM |
-| the extra-field check is removed | MAL, RM, RPTW |
-| ids are parsed by `str::parse`, which refuses `0x…` | SPELL |
-| the header check leaves out `tx` | HDR, INC |
-| the source reads an I/O error as a malformed row | SRC |
-| a non-UTF-8 header reads as unreadable | HDR |
-| the total column prints `held` | OVW, SMP, RM, RPTW |
-| `render_csv` returns without flushing | TBLW |
-| a failed table write reads as an overflow | TBLW |
-| a failed report exits with status 4 | RPTW |
-| a dispute's amount is parsed (review) | SPELL |
-| the header must name `amount` (review) | SPELL |
-| the header check leaves out `type` (review) | INC |
-| `checked_add` negates a zero reached from below (review) | ZERO |
-| the 10^15 check runs before the four-decimal one (review) | REF, MAL |
+No lesson: the person corrected nothing.

@@ -15,9 +15,6 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use app::csv_io::SinkError;
-use engine::run::SourceError;
-
 /// The overview, whose worked example is the contract's own.
 const OVERVIEW: &str = include_str!("../../../docs/overview.md");
 
@@ -41,7 +38,9 @@ const SAMPLE_REPORT: &str = "\
 1 rejected: the deposit is not disputed
 ";
 
-/// Every rejection reason but overflow, and every malformed kind, a malformed row first.
+/// Every rejection reason but overflow, and every malformed kind, a malformed row first. The locked
+/// client 2 then repeats a tx id and withdraws more than it has: each counts under the first check
+/// it fails.
 const REJECTED_AND_MALFORMED: &str = "\
 type, client, tx, amount
 deposit, 3, 13, 0
@@ -57,6 +56,8 @@ deposit, 2, 4, 1.5
 dispute, 2, 4,
 chargeback, 2, 4,
 deposit, 2, 5, 1.0
+deposit, 2, 4, 1.0
+withdrawal, 2, 14, 5.0
 Deposit, 3, 6, 1.0
 deposit, 70000, 7, 1.0
 deposit, 3, 8, 1.0, extra
@@ -75,8 +76,8 @@ client,available,held,total,locked
 
 /// The report for `REJECTED_AND_MALFORMED`.
 const REJECTED_AND_MALFORMED_REPORT: &str = "\
-1 rejected: the tx id was used before
-1 rejected: the account is locked
+2 rejected: the tx id was used before
+2 rejected: the account is locked
 1 rejected: the amount is above available
 1 rejected: no such deposit for this client
 1 rejected: the deposit is already disputed
@@ -163,6 +164,17 @@ Usage: cthulhu <input.csv>
 For more information, try '--help'.
 ";
 
+/// The error when the input cannot be read.
+#[cfg(unix)]
+const UNREADABLE: &str = "error: the input cannot be read\n";
+
+/// The error when the header lacks `type`, `client` or `tx`.
+const INCOMPLETE_HEADER: &str = "error: the header lacks type, client or tx\n";
+
+/// The error when the table cannot be written.
+#[cfg(unix)]
+const UNWRITABLE: &str = "error: the output cannot be written\n";
+
 /// Runs the binary with no arguments, under `name` as its `argv[0]`. A hard link to the binary,
 /// made while other tests ran it, got those runs killed with SIGKILL on macOS: the name changes
 /// here without touching a file.
@@ -218,13 +230,15 @@ fn input(name: &str, contents: impl AsRef<[u8]>) -> io::Result<PathBuf> {
     Ok(path)
 }
 
-/// One deposit by each client from 1 to `clients`: the table of three hundred is longer than the
-/// CSV writer's 8 KiB buffer, where the table of one fits.
+/// One deposit by each client from 1 to `clients`, each on a tx id of its own: the table of three
+/// hundred is longer than the CSV writer's 8 KiB buffer, where the table of one fits.
 #[cfg(unix)]
 fn deposits(clients: u16) -> String {
-    (1..=clients).fold(String::from("type,client,tx,amount\n"), |text, client| {
-        text + &format!("deposit,{client},{client},1.0\n")
-    })
+    (1..=clients)
+        .zip(1_u32..)
+        .fold(String::from("type,client,tx,amount\n"), |text, (client, tx)| {
+            text + &format!("deposit,{client},{tx},1.0\n")
+        })
 }
 
 /// The code block after the line `label` in the overview.
@@ -348,16 +362,14 @@ fn a_missing_input_cannot_be_opened() {
     assert!(stderr.starts_with(&format!("error: cannot open {}: ", path.display())), "{stderr}");
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unreadable_input_stops_the_run_with_no_table() {
     let directory = scratch().expect("the scratch directory exists");
     let output = cthulhu(&[&directory]).expect("the binary runs");
     assert_eq!(output.status.code(), Some(4));
     assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        format!("error: {}\n", SourceError::Unreadable)
-    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), UNREADABLE);
 }
 
 #[test]
@@ -369,10 +381,7 @@ fn an_input_without_a_complete_header_stops_the_run_with_no_table() {
         let output = cthulhu(&[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(4));
         assert_eq!(String::from_utf8_lossy(&output.stdout), "");
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            format!("error: {}\n", SourceError::IncompleteHeader)
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), INCOMPLETE_HEADER);
     }
 }
 
@@ -386,10 +395,7 @@ fn a_table_that_cannot_be_written_is_a_write_failure() {
         let stdout = unwritable().expect("an unwritable stream opens");
         let output = cthulhu_into(stdout, &[&path]).expect("the binary runs");
         assert_eq!(output.status.code(), Some(5));
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            format!("error: {}\n", SinkError::Unwritable)
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), UNWRITABLE);
     }
 }
 

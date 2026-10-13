@@ -2,17 +2,18 @@
 
 use std::io::{self, Write};
 
-use engine::domain::{AmountError, ClientReason, DisputeReason, Reason};
-use engine::run::{Report, RowError};
+use engine::domain::{ClientReason, DisputeReason, Reason};
+use engine::run::Report;
 
 /// Writes `report` to `out`, a line per count: each rejection reason, then each malformed row
-/// kind, as `<count> rejected: <reason>` and `<count> malformed: <kind>`.
+/// kind, as `<count> rejected: <reason>` and `<count> malformed: <kind>`; a kind reads as its
+/// error does.
 pub fn render_report(report: &Report, out: &mut impl Write) -> io::Result<()> {
     for (reason, count) in report.rejected() {
         writeln!(out, "{count} rejected: {}", rejection(reason))?;
     }
     for (kind, count) in report.malformed() {
-        writeln!(out, "{count} malformed: {}", malformation(kind))?;
+        writeln!(out, "{count} malformed: {kind}")?;
     }
     Ok(())
 }
@@ -27,22 +28,5 @@ fn rejection(reason: Reason) -> &'static str {
         Reason::Dispute(DisputeReason::NotSettled) => "the deposit is already disputed",
         Reason::Dispute(DisputeReason::NotDisputed) => "the deposit is not disputed",
         Reason::Overflow => "a balance would overflow",
-    }
-}
-
-/// How the report names a malformed row's kind.
-fn malformation(kind: RowError) -> &'static str {
-    match kind {
-        RowError::Unreadable => "a field does not read",
-        RowError::TooManyFields => "more fields than the header",
-        RowError::MissingAmount => "no amount",
-        RowError::InvalidAmount(AmountError::Malformed) => {
-            "invalid amount: not digits with an optional fraction"
-        }
-        RowError::InvalidAmount(AmountError::TooPrecise) => {
-            "invalid amount: more than four decimal places"
-        }
-        RowError::InvalidAmount(AmountError::TooLarge) => "invalid amount: 10^15 or more",
-        RowError::InvalidAmount(AmountError::Zero) => "invalid amount: zero",
     }
 }

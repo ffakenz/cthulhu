@@ -9,8 +9,9 @@ workspace split and the conventions for lean plans landed, so the work began fro
 `28ab587`, in a worktree of its own.
 
 **Outcome:** `feat/model-free-tests` holds sixteen commits on `28ab587`, unpushed:
-- the plan of record, [tasks/todo.md](../../tasks/todo.md), with the workspace packages' closed
-  plan kept as [tasks/workspace-packages-plan.md](../../tasks/workspace-packages-plan.md);
+- the plan of record, [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md),
+  with the workspace packages' closed plan kept as
+  [tasks/workspace-packages-plan.md](../../tasks/workspace-packages-plan.md);
 - the record *Correctness defined by equations between runs*, which supersedes *Correctness defined
   by laws and a model*;
 - the model-free suite:
@@ -61,7 +62,8 @@ mapped the 40 recorded breaks onto the new tests, and the plan was approved.
 The plan was revised for `main` at `28ab587`:
 - the crate now lives in `app/tests/it`;
 - the record takes the next free number;
-- the plan is kept in `tasks/todo.md`;
+- the plan is kept as the plan of record, now
+  [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md);
 - one review runs per branch.
 
 Once it was approved again, the plan, the record and the model-free suite landed. The recorded

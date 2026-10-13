@@ -189,8 +189,8 @@ fn any_part() -> impl Strategy<Value = u64> {
 #[test]
 fn prop_moves_add_up_the_same_in_any_grouping() {
     let law = support::for_all(
-        "a balance moved by two amounts in turn equals it moved by their sum, wherever both moves \
-         are accepted",
+        "a balance moved by two amounts in turn equals it moved by their sum, or both moves are \
+         refused",
         (
             any_amount(),
             vec(any_step(), 0..=64),
@@ -203,7 +203,7 @@ fn prop_moves_add_up_the_same_in_any_grouping() {
                 let in_turn =
                     moved(now, *first, *way).and_then(|after| moved(after, *second, *way));
                 let at_once = moved(now, first + second, *way);
-                in_turn.zip(at_once).is_none_or(|(left, right)| left == right)
+                in_turn == at_once
             })
         },
     );

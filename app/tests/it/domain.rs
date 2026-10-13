@@ -16,10 +16,13 @@ use crate::support::{self, input};
 #[test]
 fn prop_any_spelling_of_an_amount_reads_as_its_value() {
     let law = support::for_all(
-        "any spelling of an amount parses, and prints its value with four decimals",
+        "any spelling of an amount parses, and its value prints as a balance with four decimals",
         (input::any_money(), 0..=2_usize, 0..=2_usize),
         |&(money, leading, trailing)| {
-            money.spelled(leading, trailing).parse::<Amount>().map(|amount| amount.to_string())
+            money
+                .spelled(leading, trailing)
+                .parse::<Amount>()
+                .map(|amount| Balance::from(amount).to_string())
                 == Ok(money.text())
         },
     );

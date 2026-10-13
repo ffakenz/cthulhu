@@ -100,7 +100,7 @@ two new laws and on nothing else.
       `test(domain): print and group balances exactly up to their bound`.
 - [x] **4.** Green: the bound in `Balance`. Commit
       `fix(domain): refuse a balance past the range where four decimals are exact`.
-- [ ] **5.** The amount round trip prints through `Balance`; `Display for Amount` is deleted. Commit
+- [x] **5.** The amount round trip prints through `Balance`; `Display for Amount` is deleted. Commit
       `refactor(domain): print amounts only as balances`.
 - [ ] **6.** The fixture's two lines. Commit
       `test(cli): pin the reason a command gets when two checks fail`.

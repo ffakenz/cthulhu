@@ -29,7 +29,7 @@ pub enum AmountError {
     Zero,
 }
 
-/// Decimal places an amount may carry, and that every amount and balance prints.
+/// Decimal places an amount may carry, and that every balance prints.
 const PLACES: usize = 4;
 /// Whole-part digits an amount may have: amounts stay below 10^15.
 const WHOLE_DIGITS: usize = 15;
@@ -70,13 +70,6 @@ impl FromStr for Amount {
 /// Whether `text` is one or more ASCII digits.
 fn is_digits(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
-}
-
-/// Exactly four decimal places.
-impl fmt::Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.*}", PLACES, self.0)
-    }
 }
 
 /// A signed amount of money: an account's available, held or total funds. Exact at four decimal

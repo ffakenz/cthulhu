@@ -7,7 +7,7 @@ paraphrases an external brief or specification: refer to it by a neutral name on
 | File | Owner | Purpose |
 |---|---|---|
 | `todo.md` | the current piece of work | the plan of record, as checkable items, plus a Review section when it closes |
-| `<name>-plan.md` | a closed piece of work | its plan, kept verbatim before the next piece of work replaces `todo.md`; every reference that named it as `todo.md`, quoted prompts aside, names this file |
+| `<name>-plan.md` | a closed piece of work | its plan, kept verbatim before the next piece of work replaces `todo.md`, but for ticking the items done after its Review, such as the prompt history; every reference that named it as `todo.md`, quoted prompts aside, names this file |
 | `lessons.md` | corrections | what was got wrong, why, and the rule that prevents it next time |
 | `<ticket>.md` | one ticket | copy `TEMPLATE.md` |
 

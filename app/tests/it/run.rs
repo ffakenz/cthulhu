@@ -1,6 +1,6 @@
 //! The runtime through the CSV source, over fresh in-memory stores. On valid lines, clients run
 //! independently, suffixes the rules make equivalent leave the same accounts after any lines, and
-//! any spelling reads as the canonical one. A malformed line changes nothing but its count, and a
+//! any spelling reads as the canonical one. Malformed lines change nothing but their counts, and a
 //! header lacking a column or a source error stops the run.
 
 use std::collections::BTreeMap;
@@ -190,19 +190,20 @@ fn malformed(summary: &Summary) -> BTreeMap<RowError, u64> {
 }
 
 #[test]
-fn prop_a_malformed_line_changes_nothing_but_its_count() {
+fn prop_malformed_lines_change_nothing_but_their_counts() {
     let law = support::for_all(
-        "a malformed line among valid ones changes no account and no rejection, and counts once as \
-         its kind",
-        (lines(), input::any_malformed(1..=3_u16, 0..8_u32), lines()),
-        |(before, (line, flaw), after)| {
-            let valid = [before.as_slice(), after.as_slice()].concat();
-            let flawed = [
-                input::canonical(before).into_bytes(),
-                input::malformed(*line, flaw),
-                input::rows(after).into_bytes(),
-            ]
-            .concat();
+        "malformed lines among valid ones change no account and no rejection, and each counts once \
+         as its kind",
+        (lines(), vec((input::any_malformed(1..=3_u16, 0..8_u32), lines()), 1..=3)),
+        |(first, rest)| {
+            let valid: Vec<input::Line> =
+                first.iter().chain(rest.iter().flat_map(|(_, after)| after)).copied().collect();
+            let flawed = rest.iter().fold(
+                input::canonical(first).into_bytes(),
+                |text, ((line, flaw), after)| {
+                    [text, input::malformed(*line, flaw), input::rows(after).into_bytes()].concat()
+                },
+            );
             let (text, clean) = (String::from_utf8_lossy(&flawed), input::canonical(&valid));
             let (flawed_run, clean_run) =
                 (support::summary(&flawed), support::summary(clean.as_bytes()));
@@ -210,11 +211,13 @@ fn prop_a_malformed_line_changes_nothing_but_its_count() {
                 panic!("{text:?} gave {flawed_run:?}, and {clean:?} gave {clean_run:?}");
             };
             let mut counted = malformed(without);
-            *counted.entry(flaw.kind()).or_insert(0) += 1;
+            for ((_, flaw), _) in rest {
+                *counted.entry(flaw.kind()).or_insert(0) += 1;
+            }
             assert_eq!(
                 (&with.accounts, rejected(with), malformed(with)),
                 (&without.accounts, rejected(without), counted),
-                "{text:?} and {clean:?} differ in more than the flawed line's count"
+                "{text:?} and {clean:?} differ in more than the flawed lines' counts"
             );
             true
         },

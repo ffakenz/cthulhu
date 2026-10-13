@@ -265,10 +265,28 @@ pub(crate) fn any_layout() -> impl Strategy<Value = Layout> {
     )
 }
 
+/// How a header lacks one of `type`, `client` and `tx`: the column is left out, or named in another
+/// case or with a letter more.
+const LACKS: [(&str, Option<&str>); 9] = [
+    ("type", None),
+    ("type", Some("Type")),
+    ("type", Some("types")),
+    ("client", None),
+    ("client", Some("CLIENT")),
+    ("client", Some("clients")),
+    ("tx", None),
+    ("tx", Some("tX")),
+    ("tx", Some("txs")),
+];
+
 /// Any layout whose header lacks one of `type`, `client` and `tx`.
 pub(crate) fn any_incomplete_layout() -> impl Strategy<Value = Layout> {
-    (any_layout(), select(&["type", "client", "tx"])).prop_map(|(mut layout, missing)| {
-        layout.columns.retain(|&column| column != missing);
+    (any_layout(), select(&LACKS)).prop_map(|(mut layout, (missing, misnamed))| {
+        layout.columns = layout
+            .columns
+            .into_iter()
+            .filter_map(|column| if column == missing { misnamed } else { Some(column) })
+            .collect();
         layout
     })
 }

@@ -104,7 +104,7 @@ two new laws and on nothing else.
       `refactor(domain): print amounts only as balances`.
 - [x] **6.** The fixture's two lines. Commit
       `test(cli): pin the reason a command gets when two checks fail`.
-- [ ] **7.** The misspelled column. Commit
+- [x] **7.** The misspelled column. Commit
       `test(run): misspell a required column as well as leave it out`.
 - [ ] **8.** The edges at 10^15 and `u64::MAX`. Commit
       `test(domain): draw 10^15 among the amounts too large`.

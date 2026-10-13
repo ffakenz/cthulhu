@@ -6,7 +6,7 @@ The session set out to audit the black-box tests: what each pins and how, its va
 mirrors production, and any regex. It then resolved the audit's should-fix findings and wrote a
 testing strategy into `docs/`. It started from `main` at `9e4fe53`.
 
-**Outcome:** `fix/test-audit-findings` holds sixteen commits on `9e4fe53`, unpushed:
+**Outcome:** `fix/test-audit-findings` holds twenty-one commits on `9e4fe53`, unpushed:
 - the plan of record, [tasks/todo.md](../../tasks/todo.md), with the model-free tests' closed plan
   kept as [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md);
 - the record *Exact decimal amounts and balances with four places*, which supersedes *Exact decimal
@@ -21,7 +21,8 @@ testing strategy into `docs/`. It started from `main` at `9e4fe53`.
   - 10^15 as an edge of the amounts too large;
   - a resolved deposit disputed again;
 - [docs/testing.md](../../docs/testing.md): the levels of tests, how they relate, and where a new
-  check goes.
+  check goes;
+- three claims in the branch's own docs, corrected after the hand-off.
 
 ---
 
@@ -66,3 +67,12 @@ The plan ran to its end:
 The branch's one review found no blocker, and its three should-fixes landed in new commits. One of
 them closed a gap the evidence had found: a bound that clamped instead of refusing passed every
 law. The review's nits are listed for the person in the plan's Review.
+
+### 4. Fix three of the nits
+> yes
+
+The person approved fixing the three nits that were inaccuracies in the branch's own docs. Each
+landed in a commit of its own:
+- the record's rejected `i128` in units is exact up to about 1.7 × 10^34, not without a bound;
+- a stage on the roadmap owes both output equal to the sequential reference's and its own gate;
+- the bound, not the amount cap, keeps a balance exact; the cap keeps every run below the bound.

@@ -508,9 +508,9 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
 /// The columns a line's fields are read from.
 const COLUMNS: [&str; 4] = ["type", "client", "tx", "amount"];
 
-/// A line's canonical spelling: no padding, ids in decimal, no zeros added, an empty amount for a
-/// dispute command, and a `\n` end with no blank line before it.
-const CANONICAL: Spelling = Spelling {
+/// A line's plainest spelling: no padding, ids in decimal, each amount at its shortest, an empty
+/// amount for a dispute command, and a `\n` end with no blank line before it.
+const PLAIN: Spelling = Spelling {
     wraps: [Wrap::Padded("", ""); 5],
     client: Id::Decimal,
     tx: Id::Decimal,
@@ -541,7 +541,7 @@ impl Misfit {
         }
     }
 
-    /// The header, then `lines` under it in the canonical spelling.
+    /// The header, then `lines` under it in the plainest spelling.
     pub(crate) fn text(self, lines: &[Line]) -> String {
         let (named, read, kind) = match self {
             Self::Twice(column) => {
@@ -555,7 +555,7 @@ impl Misfit {
         };
         lines.iter().fold(named.join(",") + "\n", |text, &line| {
             let written = Line { kind: kind.unwrap_or(line.kind), ..line };
-            text + &fields(written, &CANONICAL, &read) + "\n"
+            text + &fields(written, &PLAIN, &read) + "\n"
         })
     }
 }

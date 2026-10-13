@@ -348,6 +348,9 @@ pub(crate) enum Flaw {
     NoAmount,
     /// A deposit or a withdrawal whose amount is refused, and why.
     Amount(String, AmountError),
+    /// A deposit or a withdrawal whose amount is quoted after a space, so its quotes read as part of
+    /// it.
+    LateQuote,
     /// A field more than the header names.
     Extra,
     /// A line that stops before its tx id.
@@ -365,6 +368,7 @@ impl Flaw {
             }
             Self::NoAmount => RowError::MissingAmount,
             Self::Amount(_, why) => RowError::InvalidAmount(*why),
+            Self::LateQuote => RowError::InvalidAmount(AmountError::Malformed),
             Self::Extra => RowError::TooManyFields,
         }
     }
@@ -435,6 +439,7 @@ fn any_flaw() -> impl Strategy<Value = Flaw> {
         prop_oneof![not_id, above_u32].prop_map(Flaw::Tx),
         Just(Flaw::NoAmount),
         any_refused_amount().prop_map(|(text, why)| Flaw::Amount(text, why)),
+        Just(Flaw::LateQuote),
         Just(Flaw::Extra),
         Just(Flaw::Short),
         Just(Flaw::NotUtf8),
@@ -449,7 +454,7 @@ pub(crate) fn any_malformed(
 ) -> impl Strategy<Value = (Line, Flaw)> {
     (any_line(clients, txs), any_flaw(), select(&MOVERS)).prop_map(|(line, flaw, mover)| {
         let kind = match &flaw {
-            Flaw::NoAmount | Flaw::Amount(..) => mover,
+            Flaw::NoAmount | Flaw::Amount(..) | Flaw::LateQuote => mover,
             Flaw::Kind(_)
             | Flaw::Client(_)
             | Flaw::Tx(_)
@@ -470,6 +475,7 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
         Flaw::Tx(id) => format!("{kind},{client},{id},{amount}\n"),
         Flaw::NoAmount => format!("{kind},{client},{tx},\n"),
         Flaw::Amount(refused, _) => format!("{kind},{client},{tx},{refused}\n"),
+        Flaw::LateQuote => format!("{kind},{client},{tx}, \"{amount}\"\n"),
         Flaw::Extra => format!("{kind},{client},{tx},{amount},x\n"),
         Flaw::Short => format!("{kind},{client}\n"),
         Flaw::NotUtf8 => format!("{kind},{client},{tx},{amount}\n"),
@@ -481,6 +487,7 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
         | Flaw::Tx(_)
         | Flaw::NoAmount
         | Flaw::Amount(..)
+        | Flaw::LateQuote
         | Flaw::Extra
         | Flaw::Short => text.into_bytes(),
     }

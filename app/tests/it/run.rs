@@ -8,6 +8,7 @@ use std::io::{self, Read};
 use std::iter;
 
 use app::csv_io::CsvSource;
+use engine::domain::Reason;
 use engine::run::{Row, RowError, RunError, SourceError, Summary, run};
 use proptest::collection::vec;
 use proptest::strategy::Strategy;
@@ -37,10 +38,15 @@ fn prop_clients_run_independently() {
                     }
                 })
                 .collect();
-            let mut by_client = distinct.clone();
-            by_client.sort_by_key(|line| line.client);
-            support::summary(input::canonical(&distinct).as_bytes())
-                == support::summary(input::canonical(&by_client).as_bytes())
+            let mut sorted = distinct.clone();
+            sorted.sort_by_key(|line| line.client);
+            let (as_drawn, by_client) = (input::canonical(&distinct), input::canonical(&sorted));
+            assert_eq!(
+                support::summary(as_drawn.as_bytes()),
+                support::summary(by_client.as_bytes()),
+                "{as_drawn:?} and {by_client:?} differ"
+            );
+            true
         },
     );
     if let Err(failure) = law {
@@ -138,8 +144,13 @@ fn prop_any_spelling_reads_as_the_canonical_one() {
                 .map(|(line, spelling)| (layout.fit(*line), spelling.clone()))
                 .collect();
             let lines: Vec<input::Line> = spelled.iter().map(|&(line, _)| line).collect();
-            support::summary(input::spelled(&spelled, layout).as_bytes())
-                == support::summary(input::canonical(&lines).as_bytes())
+            let (written, canonical) = (input::spelled(&spelled, layout), input::canonical(&lines));
+            assert_eq!(
+                support::summary(written.as_bytes()),
+                support::summary(canonical.as_bytes()),
+                "{written:?} and {canonical:?} differ"
+            );
+            true
         },
     );
     if let Err(failure) = law {
@@ -154,13 +165,23 @@ fn prop_a_header_lacking_type_client_or_tx_stops_the_run() {
         "a header lacking type, client or tx stops the run, whatever lines follow it",
         (vec((any_line, input::any_spelling()), 0..=4), input::any_incomplete_layout()),
         |(spelled, layout)| {
-            support::summary(input::spelled(spelled, layout).as_bytes())
-                == Err(RunError::Source(SourceError::IncompleteHeader))
+            let text = input::spelled(spelled, layout);
+            assert_eq!(
+                support::summary(text.as_bytes()),
+                Err(RunError::Source(SourceError::IncompleteHeader)),
+                "{text:?}"
+            );
+            true
         },
     );
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+/// Each reason, with how many commands `summary` rejected for it.
+fn rejected(summary: &Summary) -> BTreeMap<Reason, u64> {
+    summary.report.rejected().map(|(reason, count)| (reason, count.get())).collect()
 }
 
 /// Each kind of malformed line, with how many lines of it `summary` counts.
@@ -182,16 +203,20 @@ fn prop_a_malformed_line_changes_nothing_but_its_count() {
                 input::rows(after).into_bytes(),
             ]
             .concat();
-            let (Ok(with), Ok(without)) =
-                (support::summary(&flawed), support::summary(input::canonical(&valid).as_bytes()))
-            else {
-                return false;
+            let (text, clean) = (String::from_utf8_lossy(&flawed), input::canonical(&valid));
+            let (flawed_run, clean_run) =
+                (support::summary(&flawed), support::summary(clean.as_bytes()));
+            let (Ok(with), Ok(without)) = (&flawed_run, &clean_run) else {
+                panic!("{text:?} gave {flawed_run:?}, and {clean:?} gave {clean_run:?}");
             };
-            let mut counted = malformed(&without);
+            let mut counted = malformed(without);
             *counted.entry(flaw.kind()).or_insert(0) += 1;
-            with.accounts == without.accounts
-                && with.report.rejected().eq(without.report.rejected())
-                && malformed(&with) == counted
+            assert_eq!(
+                (&with.accounts, rejected(with), malformed(with)),
+                (&without.accounts, rejected(without), counted),
+                "{text:?} and {clean:?} differ in more than the flawed line's count"
+            );
+            true
         },
     );
     if let Err(failure) = law {

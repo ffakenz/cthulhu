@@ -7,8 +7,9 @@ mirrors production, and any regex. It then resolved the audit's should-fix findi
 testing strategy into `docs/`. It started from `main` at `9e4fe53`.
 
 **Outcome:** `fix/test-audit-findings` holds twenty-one commits on `9e4fe53`, unpushed:
-- the plan of record, [tasks/todo.md](../../tasks/todo.md), with the model-free tests' closed plan
-  kept as [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md);
+- the plan of record, [tasks/test-audit-fixes-plan.md](../../tasks/test-audit-fixes-plan.md), with
+  the model-free tests' closed plan kept as
+  [tasks/model-free-tests-plan.md](../../tasks/model-free-tests-plan.md);
 - the record *Exact decimal amounts and balances with four places*, which supersedes *Exact decimal
   amounts with four places*. A balance's arithmetic refuses a result past ±(2^96 − 1) × 10^−4, so a
   balance never rounds silently and printing one never panics. Three laws and an example pin the

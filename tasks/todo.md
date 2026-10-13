@@ -1,200 +1,149 @@
-# Test audit fixes — plan
+# Test audit nits — plan
 
-**Goal:** close the should-fix findings of the audit of the black-box tests, and write the testing
-strategy down:
-- the checks whose breaks escaped every test catch them;
-- a balance can no longer round silently or panic when it is printed;
-- no production code exists only for a test;
-- `docs/testing.md` describes the levels of tests and how they relate.
+**Goal:** close every nit still open from the audit of the black-box tests and from this branch's
+review:
+- a failing run law shows the inputs it ran and what they gave;
+- the engine's laws reach counts above one, and the malformed forms that no generator wrote;
+- the binary's fixtures pin every word they check;
+- the wording of a malformed row lives in one place;
+- the balance laws state all that holds, drawn from the one generator of amounts;
+- the closed plans and their references agree with the conventions.
 
-**Context:** an audit of the 24 tests on `main` at `9e4fe53` ran 37 deliberate breaks: 33 failed a
-test and 4 escaped. It also found production code that only a test calls, and a balance whose
-printing panics past 10^27. The person asked to resolve the should-fix findings on a branch, and
-to take what fits from an external page on testing strategy into a strategy of our own in `docs/`.
-The work runs on `fix/test-audit-findings`, from `main` at `9e4fe53`. The person's approval of
-this plan accepts the record in decision 1.
+**Context:** the audit of the tests on `main` at `9e4fe53` left six nits, and the branch's review
+left four once the person had chosen three. The person asked to continue with those still open,
+and asked why `deposits` in `app/tests/it/cli.rs` writes each client's number as its tx id. The
+work continues on `fix/test-audit-findings`, which has not landed; the audit fixes' closed plan is
+kept as [tasks/test-audit-fixes-plan.md](test-audit-fixes-plan.md). The person's approval of this
+plan accepts the production refactor in decision 1, the convention in decision 8 and the second
+review in decision 9.
 
 ## Decisions
 
-1. **Balances bounded where four decimals are exact.** `Balance::checked_add` and `checked_sub`
-   return `None` once a result leaves ±(2^96 − 1) × 10^−4, about 7.9 × 10^24: the range where
-   `Decimal` holds four places.
-   - Today they fail only past about 7.9 × 10^28. Between the two bounds, sums round silently,
-     and from 10^27 printing four decimals panics, because rust_decimal formats into 32 bytes.
-   - Valid input sums below 4.3 × 10^24, so the binary never gets there; `Balance`'s API does.
-   - The record *Exact decimal amounts and balances with four places* supersedes *Exact decimal
-     amounts with four places*. It carries the amounts and the output over unchanged.
-   - Rejected: a `Display` that never panics, which would still print balances that had rounded;
-     integer units, a wider change whose removal of rust_decimal needs a record of its own.
-2. **Amounts print only as balances.** The amount round trip prints through `Balance::from`, as
-   the table does. `Display for Amount` is deleted: that law was its only caller.
-3. **The four test gaps are characterisation tests.** The behaviour they pin already works, so
-   none has a red. Instead, each check is shown to catch the break that escaped, in a scratch copy
-   and never in the repo.
-4. **The testing strategy goes in `docs/testing.md`**, a standing document beside the
-   architecture's picture. It takes no new record: it pictures *Correctness defined by equations
-   between runs* and *Runtimes proven against a sequential reference*. From the external page it
-   takes:
-   - **levels**: the binary; the engine through its source; the domain's functions; and, beside
-     them, the gate and, ahead, runtime equivalence and benchmarks. For each: what it proves,
-     what it runs against, and through which interface;
-   - **two links between levels**:
-     - a level *overlaps* a lower one when both run the same code without fakes, and the lower one
-       covers cases the upper cannot reach;
-     - a level *relies on* a lower one when it fakes what the lower one checks for real;
-   - **where a new check goes**: most checks are laws on the engine; the domain takes the fine print
-     no run reaches; the binary pins only what an equation cannot see;
-   - **outside-in for a new stage**: its outermost check, the equivalence law or the benchmark
-     gate, is written first.
+1. **A malformed row's kind prints as its error reads.** `render_report` writes each malformed
+   kind through `RowError`'s `Display`, and the `malformation` match is deleted.
+   - The two wordings agree today, but nothing prints the `#[error]` texts, so they could drift
+     apart silently.
+   - *csv, serde, rust_decimal, thiserror, clap, proptest and rand as dependencies* names
+     `RowError` and `AmountError` among the error types whose messages `thiserror` derives. Their
+     texts stay, and the report reads them.
+   - A rejection's reason keeps its wording in `text_io`: `Reason` is not an error and has no
+     `Display`.
+   - A refactor: the binary's fixture pins every malformed kind's words, before and after.
+2. **A failing run law shows both texts and both results.** The four run laws that return a bool
+   assert instead, as the pairs law does. A failure prints the CSV text of each run and each
+   summary; the header law prints its text and the result.
+   - *Correctness defined by equations between runs* says a failing equation prints both inputs
+     and both sets of accounts. Today these four print only the generators' structs.
+   - Rejected: `for_all` taking a reason instead of a bool. Every law would change, the domain's
+     included, whose inputs already print in full.
+3. **Several malformed lines, of any kinds.** The malformed-line law inserts one to three flawed
+   lines among valid ones, each counted once as its kind, so counts above one are pinned below the
+   binary. It becomes `prop_malformed_lines_change_nothing_but_their_counts`.
+4. **The malformed forms no generator wrote**, all but the third in the overview's Input:
+   - a flaw: an amount quoted after a space keeps its quotes, so it is refused as malformed;
+   - a generator of headers that misfit the lines under them, and a law: under such a header each
+     line is malformed and no account opens:
+     - a header naming `type`, `client`, `tx` or `amount` twice: each line is unreadable;
+     - a header ending in a column besides the four, which each line stops before: unreadable;
+     - a header naming no `amount`, over deposits and withdrawals: no amount.
 
-   It leaves out test-only interfaces in production, an independently written simulator as an
-   oracle, and multi-process levels, which have nothing to test yet. The external project is never
-   named.
+     The lines are canonical: the misfit lies in the header, and the spellings' law already
+     covers how each field is written.
+5. **The binary's fixtures spell out what they check.**
+   - The three expected error lines built from `SourceError`'s and `SinkError`'s `Display` are
+     written out, so the binary's level pins their words.
+   - `an_unreadable_input_stops_the_run_with_no_table` runs on Unix only, as its neighbours do:
+     elsewhere, opening a directory fails before the read the test means.
+   - `deposits` draws its tx ids apart from its clients. The numbers stay the same, so every
+     deposit is still accepted, but the line no longer reads as a typo.
+6. **The balance laws state all that holds, from the one generator of amounts.**
+   - `any_amount` maps `input::any_money()` to units through a new `Money::units`; `CAP` and the
+     repeated edges go. Probe: dropping the bound still fails the printing and grouping laws, and
+     a bound at 10^20 the 32-doublings law, in 3 runs of 3 each.
+   - The grouping law asserts `in_turn == at_once`. Two moves the same way are both refused or
+     equal, since the accepted range is an interval. Probe: it holds over 20,000 cases, and a
+     per-move limit on debits fails it where today's law passes.
+   - Rejected: deriving `CAP` from `TOO_LARGE`, which keeps a second generator of the same values.
+7. **`LACKS` names its parts:** a `Lack`, with the `column` left out and the name written
+   `instead`, if any. `BREAKS` keeps its pairs, which read as the text before and after, as the
+   review allowed.
+8. **Closed plans agree with the conventions.**
+   - Prompt history 0008's narrative names `tasks/model-free-tests-plan.md`, as the conventions
+     ask of every reference but a quoted prompt.
+   - `CLAUDE.md` says a closed plan is kept verbatim but for ticking the items done after its
+     Review: the prompt history and the hand-off. The model-free tests' archive did that; the
+     archive here needs no tick.
+9. **A review of this plan's commits.** The branch's one review covered the commits before them.
+   This work changes production code and five test files, so it gets one review of its own.
 
 ## Files and interfaces
 
 | File | After the change |
 |---|---|
-| `libs/engine/src/domain/money.rs` | `Balance::checked_add` and `checked_sub` refuse a result outside the exact range; `Display for Amount` deleted; doc comments to match |
-| `docs/design/` | the new record, its index line, and the superseded record's Status line |
-| `app/tests/it/domain.rs` | three balance laws (Tests); the amount round trip prints through `Balance` |
-| `app/tests/it/support/input.rs` | too-large digits draw 10^15 and `u64::MAX` as edges; the incomplete layout misspells a required column as well as drops it |
-| `app/tests/it/run.rs` | one more pair |
-| `app/tests/it/cli.rs` | two more fixture lines, and the two counts they change |
-| `docs/testing.md` | new: the testing strategy |
-| `docs/overview.md`, `docs/architecture.md`, `README.md`, `CLAUDE.md` | name the new record, and link the strategy |
+| `app/src/text_io.rs` | a malformed kind prints through `RowError`'s `Display`; `malformation` deleted |
+| `app/tests/it/run.rs` | the four bool laws assert, with both texts and both results; the malformed-line law takes up to three flawed lines; the misfit law; the module doc to match |
+| `app/tests/it/support/input.rs` | the late-quote flaw; `Misfit`, its generator and its text; `Lack`; `Money::units` |
+| `app/tests/it/domain.rs` | `any_amount` maps `any_money`, and `CAP` goes; the grouping law asserts the equality |
+| `app/tests/it/cli.rs` | three error lines written out; the directory test on Unix only; `deposits` draws its tx ids apart |
+| `docs/testing.md` | the engine's row names several malformed lines and the misfits |
+| `docs/prompts/0008-model-free-tests.md`, `docs/prompts/0009-test-audit-fixes.md` | name the closed plans |
+| `CLAUDE.md` | a closed plan's ticks |
+| `tasks/test-audit-fixes-plan.md` | the audit fixes' closed plan, verbatim |
 
 ## Tests
 
-- **Balance laws** (`domain.rs`): each runs over the balances an amount reaches in up to 64 steps
-  (doubled, credited or debited), stopping at the first refused step.
-  - `prop_every_balance_prints_with_four_decimals`. Red today: printing panics past 10^27.
-  - `prop_moves_add_up_the_same_in_any_grouping`: a reached balance moved by two amounts in turn
-    equals the same balance moved by their sum, wherever both are accepted. Red today: past
-    7.9 × 10^24 the two differ. Probe: from 33 doublings of the largest amount.
-  - `prop_any_amount_doubled_32_times_is_a_balance`: the most that valid input can sum to stays
-    a balance. Green today; it keeps the bound from being set too tight.
-- **Gaps closed**, each with the break it must catch:
+No check here has a red: each pins behaviour that already works, or restates a law. Instead, each
+is shown to catch its break in a scratch copy, never in the repo; the results go in the Review.
 
-  | Check | Break it must catch |
-  |---|---|
-  | fixture: a repeated tx id from the locked client counts as "the tx id was used before" | the lock checked before the repeat |
-  | fixture: a withdrawal above available by the locked client counts as "the account is locked" | the funds checked before the lock |
-  | incomplete layout: a required column misspelled, in another case or with a letter more | header names compared ignoring case |
-  | refused amounts: 10^15 and `u64::MAX` as edges, one draw in four | a whole part of 16 digits accepted |
-  | pair: deposit·dispute·resolve·dispute ≡ deposit·dispute | a resolve that drops the deposit from history |
-  | `prop_any_amount_doubled_32_times_is_a_balance` | the bound set at 10^20 |
+| Check | Break it must catch |
+|---|---|
+| the report through `RowError`'s `Display` | `RowError::MissingAmount`'s message changed: the fixture fails, where today nothing does |
+| the four laws' failure output | one break per law: its failure shows both texts and both results |
+| several malformed lines | a malformed kind counted once, however often it occurs |
+| the late-quote flaw | quotes stripped from an amount's text |
+| a header naming a column twice | a header's repeated names dropped before its rows are read |
+| a header ending in a column the lines stop before | a short row padded to the header's length |
+| a header naming no amount | a deposit or a withdrawal under such a header read as a dispute |
+| `Lack` | header names compared ignoring case |
+| `any_amount` from `any_money` | the bound dropped; the bound at 10^20 |
+| the grouping law's equality | a per-move limit on debits |
+| the error lines written out | `SourceError::Unreadable`'s message changed |
 
 ## Tasks
 
-Every commit passes `make ci` and the forbidden-name check, except the red at 3, which fails on its
-two new laws and on nothing else.
+Every commit passes `make ci` and the forbidden-name check.
 
-- [x] **0.** The branch; the archive and the link; this plan. Commit
-      `docs(tasks): keep the model-free tests plan and plan the audit fixes`.
-- [x] **1.** The record, its index line, and the superseded record's Status line. Commit
-      `docs(design): record exact decimal amounts and balances with four places`.
-- [x] **2.** `prop_any_amount_doubled_32_times_is_a_balance`. Commit
-      `test(domain): hold 2^32 of any amount in a balance`.
-- [x] **3.** Red: the other two balance laws. Commit
-      `test(domain): print and group balances exactly up to their bound`.
-- [x] **4.** Green: the bound in `Balance`. Commit
-      `fix(domain): refuse a balance past the range where four decimals are exact`.
-- [x] **5.** The amount round trip prints through `Balance`; `Display for Amount` is deleted. Commit
-      `refactor(domain): print amounts only as balances`.
-- [x] **6.** The fixture's two lines. Commit
-      `test(cli): pin the reason a command gets when two checks fail`.
-- [x] **7.** The misspelled column. Commit
-      `test(run): misspell a required column as well as leave it out`.
-- [x] **8.** The edges at 10^15 and `u64::MAX`. Commit
-      `test(domain): draw 10^15 among the amounts too large`.
-- [x] **9.** The pair. Commit `test(run): dispute a resolved deposit again`.
-- [x] **10.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
+- [ ] **0.** The archive and its link; this plan. Commit
+      `docs(tasks): keep the audit fixes plan and plan the nits`.
+- [ ] **1.** The report through `RowError`'s `Display`. Commit
+      `refactor(app): print a malformed row's kind as its error reads`.
+- [ ] **2.** The four laws assert. Commit
+      `test(run): show both texts and both results when a run law fails`.
+- [ ] **3.** Several flawed lines. Commit `test(run): count several malformed lines of any kinds`.
+- [ ] **4.** The late quote. Commit `test(run): refuse an amount quoted after padding`.
+- [ ] **5.** The misfits and their law. Commit
+      `test(run): find each line malformed under a header that misfits it`.
+- [ ] **6.** `Lack`. Commit `refactor(run): name the column a header lacks and its stand-in`.
+- [ ] **7.** `any_amount` from `any_money`. Commit
+      `test(domain): draw the balance laws' amounts from the one generator of amounts`.
+- [ ] **8.** The grouping law's equality. Commit
+      `test(domain): assert that two moves equal one by their sum, refusals included`.
+- [ ] **9.** The error lines written out. Commit
+      `test(cli): spell out the error lines the binary prints`.
+- [ ] **10.** The directory test on Unix only. Commit
+      `test(cli): run the unreadable-input test on Unix only`.
+- [ ] **11.** `deposits`' tx ids. Commit
+      `refactor(cli): draw the deposits' tx ids apart from their clients`.
+- [ ] **12.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
       check. The results go in the Review.
-      Deviation: two of the table's breaks, the 16-digit whole part and the resolve that drops its
-      deposit, had been caught before by fixtures alone; the laws now catch them too.
-- [x] **11.** `docs/testing.md`, and the docs that name the record or link the strategy. Commit
-      `docs(testing): describe the testing strategy`.
-- [x] **12.** One `code-reviewer` run on the branch; its fixes go in new commits.
-      Deviation: no blocker. The three should-fixes landed as `docs(engine): describe overflow as
-      passing the largest balance`, `refactor(domain): name the units and the way of a step's move`
-      and `test(domain): pin the largest balance and refuse one unit past it`.
-- [x] **13.** The Review and any lesson. Commit `docs(tasks): close the audit fixes plan`.
-- [x] **14.** Prompt history 0009, alone:
-      `docs(prompts): add prompt history 0009 (test audit fixes)`.
-- [x] **15.** Report what is on the branch. Landing is the person's.
-      Deviation: the person chose three of the review's nits, each fixed in a commit of its own:
-      `docs(design): state where the rejected i128 overflows`,
-      `docs(testing): ask a stage for equivalence and its own gate` and
-      `docs(overview): credit the bound, not the amount cap, with exact balances`. This plan and
-      prompt history 0009 record them.
-
-## Review
-
-**What the work became.** Sixteen commits on `9e4fe53`; the test crate went from 24 tests to 28.
-- A balance is bounded at ±(2^96 − 1) × 10^−4. Its arithmetic refuses a result rather than round
-  it, and printing one no longer panics. The record *Exact decimal amounts and balances with four
-  places* supersedes *Exact decimal amounts with four places*.
-- Three laws and an example pin the bound:
-  - every reached balance prints with four decimals;
-  - two moves add up the same in any grouping;
-  - a balance holds 2^32 of any amount;
-  - the largest balance prints, and one unit past it, either way, is refused.
-- `Display for Amount` is gone. The amount round trip prints through `Balance`, as the table does.
-- The four test gaps are closed:
-  - the reason a command gets when two checks fail;
-  - a misspelled header column;
-  - 10^15 as an edge of the amounts too large;
-  - a resolved deposit disputed again.
-- `docs/testing.md` covers:
-  - the levels of tests and the two links between them;
-  - where a new check goes and the order of work;
-  - what is ahead and what is left out.
-
-  It names no outside project.
-
-**Evidence.** Each break ran in a scratch copy, never in the repo.
-
-| Break | Fails | Before the branch |
-|---|---|---|
-| the lock checked before the repeat | the rejected-and-malformed fixture | escaped every test |
-| the funds checked before the lock | the rejected-and-malformed fixture | escaped every test |
-| header names compared ignoring case | `prop_a_header_lacking_type_client_or_tx_stops_the_run` | escaped every test |
-| a whole part of 16 digits accepted | `prop_text_an_amount_refuses_says_why`, in 3 runs of 3; also the malformed-line law and two fixtures | two fixtures only |
-| a resolve that drops its deposit | `prop_equivalent_commands_leave_the_same_accounts`, on the new pair; also a fixture | one fixture only |
-| the bound set at 10^20 | `prop_any_amount_doubled_32_times_is_a_balance` | no bound yet |
-| the bound dropped | the printing and grouping laws, as the red showed | no bound yet |
-| the bound clamping instead of refusing | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
-| the bound made strict | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
-| the bound lowered to 5 × 10^24 | `the_largest_balance_prints_and_one_unit_past_it_is_refused` | escaped every law until the review's fix |
-
-**What the framing got wrong.**
-1. The plan called every gap a break that escaped. Two of them, the 16-digit whole part and the
-   resolve that drops its deposit, had been caught by fixture wording alone: they escaped the laws,
-   not the suite.
-2. The plan's balance laws pinned the bound only between 4.3 × 10^24 and 7.9 × 10^24. A bound that
-   clamped, was strict, or sat lower passed every law. The review asked for the exact example that
-   now catches all three.
-3. The first draft of `docs/testing.md` claimed that no run reaches a refused amount's reason, or
-   zero from below. Both are false: the malformed-line law counts the reason, and a resolve after a
-   withdrawal comes back up to zero. The claims were corrected before the commit.
-
-**Deliberately not done.** The review's nits, for the person to choose:
-- The grouping law could assert the equality outright, since both moves are refused or both
-  equal; it guards with `is_none_or`.
-- `LACKS` is a positional table, as `BREAKS` is.
-- `CAP` restates the amount cap in units, and `any_amount` repeats the edges of `EDGE_MONEY`.
-- The record says an `i128` in units is "exact without a bound"; it overflows near 1.7 × 10^34.
-- `docs/testing.md`'s order of work reads as if equivalence or the benchmark gate suffices. The
-  roadmap asks for equivalence on every stage, plus the stage's own gate.
-- The overview credits the amount cap with keeping balances exact. The bound does that now; the
-  cap keeps runs off the bound.
-- The archive ticked the closed plan's last two items, by precedent, and prompt history 0008's
-  narrative still says the plan is kept in `tasks/todo.md`.
-
-After the hand-off, the person chose the three nits that were inaccuracies in this branch's own
-docs: the record's `i128`, the order of work, and the overview's credit to the cap. Each is fixed
-in a commit of its own; the other four stay open.
-
-The audit's nits stay as they were; the person chose the should-fix findings only. No lesson: the
-person corrected nothing.
+- [ ] **13.** The engine's row in `docs/testing.md`. Commit
+      `docs(testing): name what the engine's laws reach now`.
+- [ ] **14.** Prompt history 0008's narrative. Commit
+      `docs(prompts): name where the model-free tests plan is kept`.
+- [ ] **15.** The convention on ticks. Commit
+      `docs(conventions): let a closed plan tick the items done after its Review`.
+- [ ] **16.** One `code-reviewer` run on this plan's commits; its fixes go in new commits.
+- [ ] **17.** The Review and any lesson. Commit `docs(tasks): close the nits plan`.
+- [ ] **18.** Prompt history 0009 gains this work's turns, alone:
+      `docs(prompts): add the nits to prompt history 0009`.
+- [ ] **19.** Report what is on the branch. Landing is the person's.

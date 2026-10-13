@@ -44,6 +44,11 @@ impl Money {
         format!("{}.{:04}", self.whole, self.fraction)
     }
 
+    /// The value in units of 0.0001.
+    pub(crate) fn units(self) -> u64 {
+        self.whole * 10_000 + u64::from(self.fraction)
+    }
+
     /// The value after `leading` zeros, with `trailing` zeros after its last significant decimal,
     /// and with no point when it is whole and nothing trails.
     pub(crate) fn spelled(self, leading: usize, trailing: usize) -> String {

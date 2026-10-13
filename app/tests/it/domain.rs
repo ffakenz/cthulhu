@@ -105,12 +105,9 @@ fn prop_moves_then_their_sum_back_print_zero() {
     }
 }
 
-/// The units of 0.0001 every amount stays below: 10^19, for a whole part below 10^15.
-const CAP: u64 = 10_000_000_000_000_000_000;
-
-/// Any amount, as units of 0.0001, one draw in four at an edge: the smallest, one, or the largest.
+/// Any amount, as units of 0.0001.
 fn any_amount() -> impl Strategy<Value = u64> {
-    prop_oneof![1 => select(&[1, 10_000, CAP - 1]), 3 => 1..CAP]
+    input::any_money().prop_map(input::Money::units)
 }
 
 #[test]

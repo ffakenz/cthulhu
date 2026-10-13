@@ -106,7 +106,7 @@ two new laws and on nothing else.
       `test(cli): pin the reason a command gets when two checks fail`.
 - [x] **7.** The misspelled column. Commit
       `test(run): misspell a required column as well as leave it out`.
-- [ ] **8.** The edges at 10^15 and `u64::MAX`. Commit
+- [x] **8.** The edges at 10^15 and `u64::MAX`. Commit
       `test(domain): draw 10^15 among the amounts too large`.
 - [ ] **9.** The pair. Commit `test(run): dispute a resolved deposit again`.
 - [ ] **10.** Evidence, in a scratch copy and never in the repo: each break in the table fails its

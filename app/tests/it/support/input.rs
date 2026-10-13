@@ -389,9 +389,11 @@ fn zero(whole: usize, decimals: usize) -> String {
 
 /// Digits an amount refuses, with why: zero, more than four decimals, or 10^15 or more. More than
 /// four decimals is drawn on whole parts of any size, since that refusal comes before 10^15 or
-/// more.
+/// more. A whole part of 10^15 or more is at an edge one draw in four: 10^15 itself, or the
+/// largest.
 fn any_out_of_bounds() -> impl Strategy<Value = (String, AmountError)> {
     let any_whole = prop_oneof![0..TOO_LARGE, TOO_LARGE..=u64::MAX];
+    let any_too_large = prop_oneof![1 => select(&[TOO_LARGE, u64::MAX]), 3 => TOO_LARGE..=u64::MAX];
     prop_oneof![
         (1..=3_usize, 0..=5_usize)
             .prop_map(|(whole, decimals)| (zero(whole, decimals), AmountError::Zero)),
@@ -399,7 +401,7 @@ fn any_out_of_bounds() -> impl Strategy<Value = (String, AmountError)> {
             format!("{whole}.{fraction:04}{digit}"),
             AmountError::TooPrecise
         )),
-        (TOO_LARGE..=u64::MAX, 0..=9_999_u16).prop_map(|(whole, fraction)| (
+        (any_too_large, 0..=9_999_u16).prop_map(|(whole, fraction)| (
             format!("{whole}.{fraction:04}"),
             AmountError::TooLarge
         )),

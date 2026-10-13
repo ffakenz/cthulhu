@@ -66,9 +66,9 @@ ones cannot see.
 ## Order of work
 
 - **A behaviour:** a failing test first, then the code that passes it.
-- **A stage on the roadmap starts from the outside.** Its outermost check is written first: output
-  equal to the sequential reference's, or its benchmark gate. The stage lands when that check
-  passes.
+- **A stage on the roadmap starts from the outside.** Its outermost checks are written first:
+  output equal to the sequential reference's, which every stage owes, and the stage's own gate on
+  the roadmap. The stage lands when both pass and every law still holds.
 - **A law that has never failed is suspect.** Each law is shown to fail once against a
   deliberately broken implementation, in a scratch copy, never in the repository.
 

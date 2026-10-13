@@ -7,7 +7,7 @@ use crate::domain::{
     DisputeEvent, DisputeReason, Event, Footprint, Lock, Sight, Status,
 };
 
-/// A balance would leave the range the decimal type holds.
+/// A balance would pass the largest balance, either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("a balance overflowed")]
 pub struct Overflow;

@@ -39,7 +39,7 @@ const EDGE_MONEY: [Money; 3] = [
 ];
 
 impl Money {
-    /// The value as an amount prints it: four decimals.
+    /// The value as a balance prints it: four decimals.
     pub(crate) fn text(self) -> String {
         format!("{}.{:04}", self.whole, self.fraction)
     }

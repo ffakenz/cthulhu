@@ -171,7 +171,7 @@ pub enum SinkError {
     /// Writing the output failed.
     #[error("the output cannot be written")]
     Unwritable,
-    /// The client's total, available plus held, overflows the decimal type.
+    /// The client's total, available plus held, passes the largest balance, either way.
     #[error("the total of client {0} overflows")]
     Overflow(ClientId),
 }

@@ -265,27 +265,34 @@ pub(crate) fn any_layout() -> impl Strategy<Value = Layout> {
     )
 }
 
-/// How a header lacks one of `type`, `client` and `tx`: the column is left out, or named in another
-/// case or with a letter more.
-const LACKS: [(&str, Option<&str>); 9] = [
-    ("type", None),
-    ("type", Some("Type")),
-    ("type", Some("types")),
-    ("client", None),
-    ("client", Some("CLIENT")),
-    ("client", Some("clients")),
-    ("tx", None),
-    ("tx", Some("tX")),
-    ("tx", Some("txs")),
+/// How a header lacks one of `type`, `client` and `tx`: the `column` is left out, or named
+/// `instead` in another case or with a letter more.
+#[derive(Debug, Clone, Copy)]
+struct Lack {
+    column: &'static str,
+    instead: Option<&'static str>,
+}
+
+/// Every way a header lacks one of `type`, `client` and `tx`.
+const LACKS: [Lack; 9] = [
+    Lack { column: "type", instead: None },
+    Lack { column: "type", instead: Some("Type") },
+    Lack { column: "type", instead: Some("types") },
+    Lack { column: "client", instead: None },
+    Lack { column: "client", instead: Some("CLIENT") },
+    Lack { column: "client", instead: Some("clients") },
+    Lack { column: "tx", instead: None },
+    Lack { column: "tx", instead: Some("tX") },
+    Lack { column: "tx", instead: Some("txs") },
 ];
 
 /// Any layout whose header lacks one of `type`, `client` and `tx`.
 pub(crate) fn any_incomplete_layout() -> impl Strategy<Value = Layout> {
-    (any_layout(), select(&LACKS)).prop_map(|(mut layout, (missing, misnamed))| {
+    (any_layout(), select(&LACKS)).prop_map(|(mut layout, lack)| {
         layout.columns = layout
             .columns
             .into_iter()
-            .filter_map(|column| if column == missing { misnamed } else { Some(column) })
+            .filter_map(|column| if column == lack.column { lack.instead } else { Some(column) })
             .collect();
         layout
     })

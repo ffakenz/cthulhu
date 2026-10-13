@@ -113,37 +113,97 @@ is shown to catch its break in a scratch copy, never in the repo; the results go
 
 Every commit passes `make ci` and the forbidden-name check.
 
-- [ ] **0.** The archive and its link; this plan. Commit
+- [x] **0.** The archive and its link; this plan. Commit
       `docs(tasks): keep the audit fixes plan and plan the nits`.
-- [ ] **1.** The report through `RowError`'s `Display`. Commit
+- [x] **1.** The report through `RowError`'s `Display`. Commit
       `refactor(app): print a malformed row's kind as its error reads`.
-- [ ] **2.** The four laws assert. Commit
+- [x] **2.** The four laws assert. Commit
       `test(run): show both texts and both results when a run law fails`.
-- [ ] **3.** Several flawed lines. Commit `test(run): count several malformed lines of any kinds`.
-- [ ] **4.** The late quote. Commit `test(run): refuse an amount quoted after padding`.
-- [ ] **5.** The misfits and their law. Commit
+- [x] **3.** Several flawed lines. Commit `test(run): count several malformed lines of any kinds`.
+- [x] **4.** The late quote. Commit `test(run): refuse an amount quoted after padding`.
+- [x] **5.** The misfits and their law. Commit
       `test(run): find each line malformed under a header that misfits it`.
-- [ ] **6.** `Lack`. Commit `refactor(run): name the column a header lacks and its stand-in`.
-- [ ] **7.** `any_amount` from `any_money`. Commit
+- [x] **6.** `Lack`. Commit `refactor(run): name the column a header lacks and its stand-in`.
+- [x] **7.** `any_amount` from `any_money`. Commit
       `test(domain): draw the balance laws' amounts from the one generator of amounts`.
-- [ ] **8.** The grouping law's equality. Commit
+- [x] **8.** The grouping law's equality. Commit
       `test(domain): assert that two moves equal one by their sum, refusals included`.
-- [ ] **9.** The error lines written out. Commit
+- [x] **9.** The error lines written out. Commit
       `test(cli): spell out the error lines the binary prints`.
-- [ ] **10.** The directory test on Unix only. Commit
+      Deviation: amended before the next commit, so that `UNWRITABLE` is `#[cfg(unix)]`, as its one
+      test is.
+- [x] **10.** The directory test on Unix only. Commit
       `test(cli): run the unreadable-input test on Unix only`.
-- [ ] **11.** `deposits`' tx ids. Commit
+- [x] **11.** `deposits`' tx ids. Commit
       `refactor(cli): draw the deposits' tx ids apart from their clients`.
-- [ ] **12.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
+- [x] **12.** Evidence, in a scratch copy and never in the repo: each break in the table fails its
       check. The results go in the Review.
-- [ ] **13.** The engine's row in `docs/testing.md`. Commit
+- [x] **13.** The engine's row in `docs/testing.md`. Commit
       `docs(testing): name what the engine's laws reach now`.
-- [ ] **14.** Prompt history 0008's narrative. Commit
+- [x] **14.** Prompt history 0008's narrative. Commit
       `docs(prompts): name where the model-free tests plan is kept`.
-- [ ] **15.** The convention on ticks. Commit
+- [x] **15.** The convention on ticks. Commit
       `docs(conventions): let a closed plan tick the items done after its Review`.
-- [ ] **16.** One `code-reviewer` run on this plan's commits; its fixes go in new commits.
-- [ ] **17.** The Review and any lesson. Commit `docs(tasks): close the nits plan`.
+- [x] **16.** One `code-reviewer` run on this plan's commits; its fixes go in new commits.
+      Deviation: no blocker. The two should-fixes landed as
+      `refactor(run): name the misfits' spelling for what it writes` and
+      `docs(tasks): give the closed plans' row the convention's exception`.
+- [x] **17.** The Review and any lesson. Commit `docs(tasks): close the nits plan`.
 - [ ] **18.** Prompt history 0009 gains this work's turns, alone:
       `docs(prompts): add the nits to prompt history 0009`.
 - [ ] **19.** Report what is on the branch. Landing is the person's.
+
+## Review
+
+**What the work became.** Nineteen commits on `537e953`, this Review's and the prompt history's
+included; the test crate went from 28 tests to 29.
+- A malformed row's kind prints through `RowError`'s `Display`, so its words live once, in the
+  error's message.
+- The four run laws that returned a bool assert: a failure prints the CSV text of both runs and
+  both results.
+- The malformed-line law takes one to three flawed lines, a new flaw quotes an amount after
+  padding, and a new law covers the three headers that misfit their lines.
+- The balance laws draw their amounts from `input::any_money()`, and the grouping law asserts the
+  equality outright.
+- The binary's fixtures spell out their error lines, the unreadable-input test is Unix-only, and
+  `deposits` draws its tx ids apart.
+- `Lack` names its parts, prompt history 0008 names its closed plan, and `CLAUDE.md` and
+  `tasks/README.md` let a closed plan tick the items done after its Review.
+
+**Evidence.** Each break ran in the scratch worktree, at `61ecf01` and, where the check is new, at
+`537e953`, the branch before this plan.
+
+| Break | Fails at `61ecf01` | At `537e953` |
+|---|---|---|
+| `RowError::MissingAmount`'s message changed | the rejected-and-malformed fixture | escaped every test |
+| `SourceError::Unreadable`'s message changed | the unreadable-input fixture | escaped every test |
+| a malformed kind counted once, however often it occurs | the malformed-lines law, the misfit law and the fixture | the fixture only |
+| quotes stripped from an amount's text | the malformed-lines law | escaped every test |
+| a header's repeated names dropped before its rows are read | the misfit law | escaped every test |
+| a short row padded to the header's length | the misfit law | escaped every test |
+| a deposit or a withdrawal under a header with no amount read as a dispute | the misfit law | escaped every test |
+| header names compared ignoring case | the incomplete-header law | not rerun: caught before too |
+| the bound dropped, in 3 runs | the printing and grouping laws and the largest-balance example, in each | not rerun |
+| the bound at 10^20, in 3 runs | the 32-doublings law and the largest-balance example, in each | not rerun |
+| a per-move limit on debits | the grouping law, the largest-balance example and the pairs law | the example and the pairs law; the grouping law passed |
+
+Each of the four laws that now assert was failed once more, by the report keeping only its last
+rejection, fields left untrimmed, extra fields read, and the header compared ignoring case. Each
+failure printed the CSV texts and both results. The spelling law, for one, printed
+`"note,amount,type,client,tx\nx,0.0001,deposit,0, 0"` against
+`"type,client,tx,amount\ndeposit,0,0,0.0001\n"`, with both summaries.
+
+**What the framing got wrong.**
+1. Decision 4 called the misfits' lines canonical. Their spelling writes each amount at its
+   shortest, where `input::canonical` writes four decimals; the review had it named plain.
+2. Decision 8 changed the convention in `CLAUDE.md` alone. `tasks/README.md` states it too, and
+   the review caught the two disagreeing.
+3. Task 9 defined `UNWRITABLE` on every target, while its one test runs on Unix only. The commit
+   was amended before the next one; no target but the host's is installed, so no build off Unix
+   checked it.
+
+**Deliberately not done.** The review's one nit, for the person to choose: the grouping law's
+label, "or both moves are refused", can be read as the two amounts' moves. "Refusals included",
+the commit's wording, reads one way only.
+
+No lesson: the person corrected nothing.

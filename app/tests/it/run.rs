@@ -1,7 +1,8 @@
 //! The runtime through the CSV source, over fresh in-memory stores. On valid lines, clients run
 //! independently, suffixes the rules make equivalent leave the same accounts after any lines, and
-//! any spelling reads as the canonical one. Malformed lines change nothing but their counts, and a
-//! header lacking a column or a source error stops the run.
+//! any spelling reads as the canonical one. Malformed lines change nothing but their counts, lines
+//! under a header that misfits them are each malformed, and a header lacking a column or a source
+//! error stops the run.
 
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -218,6 +219,36 @@ fn prop_malformed_lines_change_nothing_but_their_counts() {
                 (&with.accounts, rejected(with), malformed(with)),
                 (&without.accounts, rejected(without), counted),
                 "{text:?} and {clean:?} differ in more than the flawed lines' counts"
+            );
+            true
+        },
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+#[test]
+fn prop_lines_that_misfit_their_header_are_malformed() {
+    let law = support::for_all(
+        "under a header that names a column twice, ends in a column the lines stop before, or names \
+         no amount over deposits and withdrawals, each line is malformed and opens nothing",
+        (lines(), input::any_misfit()),
+        |(drawn, misfit)| {
+            let (text, empty) = (misfit.text(drawn), input::canonical(&[]));
+            let (misfit_run, empty_run) =
+                (support::summary(text.as_bytes()), support::summary(empty.as_bytes()));
+            let (Ok(with), Ok(without)) = (&misfit_run, &empty_run) else {
+                panic!("{text:?} gave {misfit_run:?}, and {empty:?} gave {empty_run:?}");
+            };
+            let mut counted = malformed(without);
+            for _ in drawn {
+                *counted.entry(misfit.kind()).or_insert(0) += 1;
+            }
+            assert_eq!(
+                (&with.accounts, rejected(with), malformed(with)),
+                (&without.accounts, rejected(without), counted),
+                "{text:?} and {empty:?} differ in more than the lines' counts"
             );
             true
         },

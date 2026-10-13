@@ -492,3 +492,67 @@ pub(crate) fn malformed(line: Line, flaw: &Flaw) -> Vec<u8> {
         | Flaw::Short => text.into_bytes(),
     }
 }
+
+/// The columns a line's fields are read from.
+const COLUMNS: [&str; 4] = ["type", "client", "tx", "amount"];
+
+/// A line's canonical spelling: no padding, ids in decimal, no zeros added, an empty amount for a
+/// dispute command, and a `\n` end with no blank line before it.
+const CANONICAL: Spelling = Spelling {
+    wraps: [Wrap::Padded("", ""); 5],
+    client: Id::Decimal,
+    tx: Id::Decimal,
+    zeros: (0, 0),
+    stray: Stray::Empty,
+    end: "\n",
+    blank: false,
+};
+
+/// How a header misfits the lines under it, so that each is malformed.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Misfit {
+    /// The header names this one of `type`, `client`, `tx` and `amount` twice, and each line has a
+    /// field for each name.
+    Twice(&'static str),
+    /// The header ends in a column besides the four, and each line stops before it.
+    Unfinished,
+    /// The header names no `amount`, and each line is this deposit or withdrawal.
+    NoAmount(&'static str),
+}
+
+impl Misfit {
+    /// The kind the report counts each line under this header as.
+    pub(crate) fn kind(self) -> RowError {
+        match self {
+            Self::Twice(_) | Self::Unfinished => RowError::Unreadable,
+            Self::NoAmount(_) => RowError::MissingAmount,
+        }
+    }
+
+    /// The header, then `lines` under it in the canonical spelling.
+    pub(crate) fn text(self, lines: &[Line]) -> String {
+        let (named, read, kind) = match self {
+            Self::Twice(column) => {
+                let twice = [COLUMNS.as_slice(), &[column]].concat();
+                (twice.clone(), twice, None)
+            }
+            Self::Unfinished => ([COLUMNS.as_slice(), &["note"]].concat(), COLUMNS.to_vec(), None),
+            Self::NoAmount(mover) => {
+                (vec!["type", "client", "tx"], vec!["type", "client", "tx"], Some(mover))
+            }
+        };
+        lines.iter().fold(named.join(",") + "\n", |text, &line| {
+            let written = Line { kind: kind.unwrap_or(line.kind), ..line };
+            text + &fields(written, &CANONICAL, &read) + "\n"
+        })
+    }
+}
+
+/// Any misfit, its column named twice or its deposit or withdrawal drawn among all.
+pub(crate) fn any_misfit() -> impl Strategy<Value = Misfit> {
+    prop_oneof![
+        select(&COLUMNS).prop_map(Misfit::Twice),
+        Just(Misfit::Unfinished),
+        select(&MOVERS).prop_map(Misfit::NoAmount),
+    ]
+}

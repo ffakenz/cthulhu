@@ -92,9 +92,9 @@ two new laws and on nothing else.
 
 - [x] **0.** The branch; the archive and the link; this plan. Commit
       `docs(tasks): keep the model-free tests plan and plan the audit fixes`.
-- [ ] **1.** The record, its index line, and the superseded record's Status line. Commit
+- [x] **1.** The record, its index line, and the superseded record's Status line. Commit
       `docs(design): record exact decimal amounts and balances with four places`.
-- [ ] **2.** `prop_any_amount_doubled_32_times_is_a_balance`. Commit
+- [x] **2.** `prop_any_amount_doubled_32_times_is_a_balance`. Commit
       `test(domain): hold 2^32 of any amount in a balance`.
 - [ ] **3.** Red: the other two balance laws. Commit
       `test(domain): print and group balances exactly up to their bound`.

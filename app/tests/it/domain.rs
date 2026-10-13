@@ -1,5 +1,6 @@
 //! Laws of the domain's money: any spelling of an amount reads as its value, text an amount refuses
-//! says why, and moves then their sum back print zero, from above or below, at any scales.
+//! says why, moves then their sum back print zero, from above or below, at any scales, and a
+//! balance holds 2^32 of any amount.
 
 use engine::domain::{Amount, AmountError, Balance};
 use proptest::collection::vec;
@@ -91,6 +92,30 @@ fn prop_moves_then_their_sum_back_print_zero() {
          above or below, at any scales",
         (vec(any_units, 2..=4), select(&[Move::Credit, Move::Debit])),
         |(units, way)| there_and_back(units, *way).is_some_and(|zero| zero.to_string() == "0.0000"),
+    );
+    if let Err(failure) = law {
+        panic!("{failure}");
+    }
+}
+
+/// The units of 0.0001 every amount stays below: 10^19, for a whole part below 10^15.
+const CAP: u64 = 10_000_000_000_000_000_000;
+
+/// Any amount, as units of 0.0001, one draw in four at an edge: the smallest, one, or the largest.
+fn any_amount() -> impl Strategy<Value = u64> {
+    prop_oneof![1 => select(&[1, 10_000, CAP - 1]), 3 => 1..CAP]
+}
+
+#[test]
+fn prop_any_amount_doubled_32_times_is_a_balance() {
+    let law = support::for_all(
+        "any amount doubled 32 times is a balance, as 2^32 deposits of it sum to one",
+        any_amount(),
+        |&units| {
+            balance(units)
+                .and_then(|start| (0..32).try_fold(start, |sum, _| sum.checked_add(sum)))
+                .is_some()
+        },
     );
     if let Err(failure) = law {
         panic!("{failure}");

@@ -51,7 +51,7 @@ fn prop_clients_run_independently() {
 /// Pairs of suffixes that leave the same accounts after any lines, each under the rule it pins:
 /// `c` is the drawn client, `o` another and `F` one no line names; `a` and `b` are the drawn
 /// amounts; `X`, `Y` and `Z` are tx ids no line names.
-fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 14] {
+fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 15] {
     const F: u16 = 9;
     const X: u32 = 100;
     const Y: u32 = 101;
@@ -71,6 +71,8 @@ fn pairs(c: u16, a: &str, b: &str) -> [(String, String); 14] {
         (format!("{deposit}resolve,{c},{X}\nchargeback,{c},{X}\n"), deposit.clone()),
         // A second dispute of a held deposit changes nothing.
         (format!("{held}dispute,{c},{X}\n"), held.clone()),
+        // A resolved deposit can be disputed again.
+        (format!("{held}resolve,{c},{X}\ndispute,{c},{X}\n"), held.clone()),
         // A chargeback takes back exactly what its deposit added, whatever the amount, and locks.
         (charged.clone(), format!("{other}dispute,{c},{Y}\nchargeback,{c},{Y}\n")),
         // A locked account refuses deposits.

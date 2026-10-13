@@ -1,7 +1,8 @@
 //! Laws of the domain's money: any spelling of an amount reads as its value, text an amount refuses
 //! says why, and moves then their sum back print zero, from above or below, at any scales. Every
 //! balance that doublings, credits and debits reach prints with four decimals and adds up the same
-//! in any grouping, and a balance holds 2^32 of any amount.
+//! in any grouping, and a balance holds 2^32 of any amount. The largest balance prints, and one unit
+//! past it, either way, is refused.
 
 use std::iter;
 
@@ -212,4 +213,26 @@ fn prop_moves_add_up_the_same_in_any_grouping() {
     if let Err(failure) = law {
         panic!("{failure}");
     }
+}
+
+/// The largest balance as it prints: (2^96 − 1) units of 0.0001.
+const LARGEST: &str = "7922816251426433759354395.0335";
+
+/// The largest balance, built through the public API: (2^62 − 1) units doubled 34 times, plus
+/// 2^34 − 1 units.
+fn largest() -> Option<Balance> {
+    let start = balance(4_611_686_018_427_387_903)?;
+    let doubled = (0..34).try_fold(start, |sum, _| sum.checked_add(sum))?;
+    doubled.checked_add(balance(17_179_869_183)?)
+}
+
+#[test]
+fn the_largest_balance_prints_and_one_unit_past_it_is_refused() {
+    let unit = balance(1).expect("0.0001 is an amount");
+    let largest = largest().expect("the largest balance is a balance");
+    let most_negative = Balance::ZERO.checked_sub(largest).expect("its negation is a balance");
+    assert_eq!(largest.to_string(), LARGEST);
+    assert_eq!(most_negative.to_string(), format!("-{LARGEST}"));
+    assert_eq!(largest.checked_add(unit), None);
+    assert_eq!(most_negative.checked_sub(unit), None);
 }
